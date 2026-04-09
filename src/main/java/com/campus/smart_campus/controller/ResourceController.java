@@ -2,6 +2,7 @@ package com.campus.smart_campus.controller;
 
 import com.campus.smart_campus.dto.ResourceRequest;
 import com.campus.smart_campus.dto.ResourceAvailabilityResponse;
+import com.campus.smart_campus.dto.ResourceUsageResponse;
 import com.campus.smart_campus.model.Resource;
 import com.campus.smart_campus.model.ResourceStatus;
 import com.campus.smart_campus.model.ResourceType;
@@ -10,6 +11,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,10 +34,23 @@ public class ResourceController {
             @RequestParam(required = false) ResourceType type,
             @RequestParam(required = false) String location,
             @RequestParam(required = false) Integer capacity,
-            @RequestParam(required = false) ResourceStatus status
+            @RequestParam(required = false) ResourceStatus status,
+            @RequestParam(required = false) String q
     ) {
         logger.info("GET /api/resources - Fetching resources");
-        return resourceService.searchResources(type, location, capacity, status);
+        return resourceService.searchResources(type, location, capacity, status, q);
+    }
+
+    @GetMapping("/suggestions")
+    public List<Resource> suggestResources(@RequestParam(required = false, defaultValue = "") String q) {
+        logger.info("GET /api/resources/suggestions - Fetching suggestions");
+        return resourceService.suggestResources(q);
+    }
+
+    @GetMapping("/analytics/most-booked")
+    public List<ResourceUsageResponse> getMostBookedResources() {
+        logger.info("GET /api/resources/analytics/most-booked - Fetching analytics");
+        return resourceService.getMostBookedResources();
     }
 
     @GetMapping("/{id}")
@@ -55,6 +70,12 @@ public class ResourceController {
     public Resource createResource(@Valid @RequestBody ResourceRequest resource) {
         logger.info("POST /api/resources - Creating resource: {}", resource.name());
         return resourceService.saveResource(resource);
+    }
+
+    @PostMapping(value = "/import/csv", consumes = {MediaType.TEXT_PLAIN_VALUE, "text/csv"})
+    public List<Resource> importCsv(@RequestBody String csvContent) {
+        logger.info("POST /api/resources/import/csv - Importing CSV resources");
+        return resourceService.importResourcesFromCsv(csvContent);
     }
 
     @PutMapping("/{id}")

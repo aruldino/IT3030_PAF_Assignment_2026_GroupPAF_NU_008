@@ -14,9 +14,10 @@ interface HeaderProps {
   notificationCount?: number;
   sidebarOpen?: boolean;
   setSidebarOpen?: (value: boolean) => void;
+  onAlertsClick?: () => void;
 }
 
-export default function Header({ currentUser, onLogout, onDeleteAccount, notificationCount = 0, sidebarOpen = false, setSidebarOpen }: HeaderProps) {
+export default function Header({ currentUser, onLogout, onDeleteAccount, notificationCount = 0, sidebarOpen = false, setSidebarOpen, onAlertsClick }: HeaderProps) {
   const [showDropdown, setShowDropdown] = useState(false);
 
   return (
@@ -54,9 +55,15 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
         {/* User Profile and Logout */}
         {currentUser && (
           <div className="header-user">
-            <div className="badge badge-light notification-badge" aria-label={`${notificationCount} unread notifications`}>
+            <button 
+              type="button"
+              className="badge badge-light notification-badge" 
+              aria-label={`${notificationCount} unread notifications`}
+              onClick={onAlertsClick}
+              style={{ cursor: 'pointer', border: 'none', background: 'inherit', padding: 'var(--spacing-xs)', borderRadius: '4px' }}
+            >
               🔔 {notificationCount} alerts
-            </div>
+            </button>
             <div className="user-profile" onClick={() => setShowDropdown(!showDropdown)}>
               <div className="user-avatar">
                 {currentUser.fullName.charAt(0).toUpperCase()}

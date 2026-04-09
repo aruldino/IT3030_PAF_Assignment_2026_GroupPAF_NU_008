@@ -1,8 +1,11 @@
 package com.campus.smart_campus.controller;
 
 import com.campus.smart_campus.dto.MaintenanceAttachmentRequest;
+import com.campus.smart_campus.dto.MaintenanceCommentEditRequest;
 import com.campus.smart_campus.dto.MaintenanceCommentRequest;
+import com.campus.smart_campus.dto.MaintenanceCommentResponse;
 import com.campus.smart_campus.dto.MaintenanceRequest;
+import com.campus.smart_campus.dto.MaintenanceSlaResponse;
 import com.campus.smart_campus.model.MaintenanceStatus;
 import com.campus.smart_campus.model.MaintenanceTicket;
 import com.campus.smart_campus.service.MaintenanceService;
@@ -67,13 +70,42 @@ public class MaintenanceController {
     }
 
     @PostMapping("/{id}/comments")
-    public List<String> addComment(@PathVariable Long id, @Valid @RequestBody MaintenanceCommentRequest request) {
+    public List<MaintenanceCommentResponse> addComment(@PathVariable Long id, @Valid @RequestBody MaintenanceCommentRequest request) {
         return maintenanceService.addComment(id, request.author(), request.comment());
     }
 
     @PostMapping("/{id}/attachments")
     public List<String> addAttachments(@PathVariable Long id, @Valid @RequestBody MaintenanceAttachmentRequest request) {
         return maintenanceService.addAttachments(id, request.attachments());
+    }
+
+    @GetMapping("/{id}/comments")
+    public List<MaintenanceCommentResponse> getComments(@PathVariable Long id) {
+        return maintenanceService.getComments(id);
+    }
+
+    @PutMapping("/{id}/comments/{commentId}")
+    public MaintenanceCommentResponse editComment(
+            @PathVariable Long id,
+            @PathVariable Long commentId,
+            @Valid @RequestBody MaintenanceCommentEditRequest request,
+            jakarta.servlet.http.HttpSession session
+    ) {
+        return maintenanceService.editComment(id, commentId, request, session);
+    }
+
+    @DeleteMapping("/{id}/comments/{commentId}")
+    public List<MaintenanceCommentResponse> deleteComment(
+            @PathVariable Long id,
+            @PathVariable Long commentId,
+            jakarta.servlet.http.HttpSession session
+    ) {
+        return maintenanceService.deleteComment(id, commentId, session);
+    }
+
+    @GetMapping("/{id}/sla")
+    public MaintenanceSlaResponse getSla(@PathVariable Long id) {
+        return maintenanceService.getSla(id);
     }
 
     @DeleteMapping("/{id}")

@@ -13,6 +13,8 @@ import com.campus.smart_campus.repository.BookingRepository;
 import com.campus.smart_campus.repository.AppUserRepository;
 import jakarta.servlet.http.HttpSession;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,12 @@ public class BookingService {
 
         return bookings.stream()
                 .sorted(Comparator.comparing(Booking::getBookingDate).thenComparing(Booking::getStartTime))
+                .toList();
+    }
+
+    public List<Booking> getBookingHistory() {
+        return bookingRepository.findAll().stream()
+                .sorted(Comparator.comparing(Booking::getCreatedAt).reversed())
                 .toList();
     }
 
@@ -107,6 +115,18 @@ public class BookingService {
 
     public List<Booking> getConflicts(Long resourceId, java.time.LocalDate bookingDate, java.time.LocalTime startTime, java.time.LocalTime endTime) {
         return bookingRepository.findConflicts(resourceId, bookingDate, startTime, endTime);
+    }
+
+    public List<Booking> expirePendingBookings() {
+        LocalDateTime cutoff = LocalDateTime.now().minus(24, ChronoUnit.HOURS);
+        List<Booking> expired = new ArrayList<>();
+
+        bookingRepository.findPendingCreatedBefore(cutoff).forEach(booking -> {
+            booking.setStatus(BookingStatus.CANCELLED);
+            expired.add(bookingRepository.save(booking));
+        });
+
+        return expired;
     }
 
     private void applyStatusTransition(Booking booking, BookingStatus targetStatus) {

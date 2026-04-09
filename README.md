@@ -1,6 +1,6 @@
 # Smart Campus Operations Hub
 
-A role-aware campus management platform for handling resources, bookings, maintenance tickets, notifications, and user access from one centralized dashboard.
+A modular campus management platform built with Spring Boot and React for resource booking, maintenance ticket handling, notifications, and role-based access control.
 
 ## Overview
 
@@ -13,12 +13,14 @@ The system currently supports:
 - Maintenance ticket tracking with priority, assignment, and closeout updates
 - Session-based authentication and role handling
 - Dashboard summaries, notifications, and announcement publishing
+- CSV import, smart search, analytics, and notification preferences
 
 ## Implemented Roles
 
 - `SUPER_ADMIN` - full access, including user management
 - `ADMIN` - manage campus operations and announcements
-- `STAFF` - create and manage operational requests
+- `TECHNICIAN` - handle assigned maintenance tickets
+- `USER` - request bookings, raise tickets, and receive notifications
 
 ## Core Modules
 
@@ -38,6 +40,8 @@ The system currently supports:
   - `APPROVED`
   - `REJECTED`
   - `CANCELLED`
+- Prevent overlapping bookings for the same resource
+- Auto-expire stale pending bookings
 
 ### 3. Maintenance Module
 
@@ -47,8 +51,10 @@ The system currently supports:
 - Manage ticket states:
   - `OPEN`
   - `IN_PROGRESS`
-- `RESOLVED`
+  - `RESOLVED`
   - `CLOSED`
+- Add and manage comments with ownership rules
+- Track SLA timing for response and resolution
 
 ### 4. Authentication and User Management
 
@@ -57,12 +63,15 @@ The system currently supports:
 - Logout and account deletion support
 - Admin-level user listing and user deletion
 - Update roles with `PUT /users/role`
+- OAuth-style login route available at `POST /auth/login/oauth`
+- Role-based endpoint protection is enforced through the backend interceptor
 
-### 5. Announcements and Dashboard
+### 5. Notifications and Dashboard
 
-- Publish official announcements
 - Display operational statistics
 - View notifications and show a role-aware dashboard for day-to-day campus monitoring
+- Manage notification preferences
+- Poll notifications periodically in the frontend for a near real-time experience
 
 ## REST API Summary
 
@@ -75,6 +84,9 @@ The system currently supports:
 - `POST /api/resources`
 - `PUT /api/resources/{id}`
 - `DELETE /api/resources/{id}`
+- `GET /resources/suggestions?q=...`
+- `GET /resources/analytics/most-booked`
+- `POST /resources/import/csv`
 
 ### Bookings
 
@@ -87,6 +99,8 @@ The system currently supports:
 - `PUT /bookings/{id}/reject`
 - `PUT /bookings/{id}/cancel`
 - `PATCH /api/bookings/{id}/status`
+- `GET /bookings/history`
+- `PUT /bookings/expire-pending`
 
 ### Maintenance
 
@@ -95,6 +109,10 @@ The system currently supports:
 - `POST /api/maintenance`
 - `POST /tickets/{id}/comments`
 - `POST /tickets/{id}/attachments`
+- `GET /tickets/{id}/comments`
+- `PUT /tickets/{id}/comments/{commentId}`
+- `DELETE /tickets/{id}/comments/{commentId}`
+- `GET /tickets/{id}/sla`
 - `PUT /api/maintenance/{id}`
 - `PUT /tickets/{id}/assign`
 - `PUT /tickets/{id}/status`
@@ -105,6 +123,7 @@ The system currently supports:
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /auth/login`
+- `POST /auth/login/oauth`
 - `GET /api/auth/me`
 - `GET /users/me`
 - `POST /api/auth/logout`
@@ -135,7 +154,7 @@ If you are presenting this as a 4-member project, this version fits the implemen
 
 ## Report-Ready Project Description
 
-> Our system is designed as a Smart Campus Operations Hub with modular architecture, implementing RESTful best practices. The platform centralizes resource management, booking approvals, maintenance ticket handling, notifications, and role-based access while supporting a clean dashboard-driven user experience.
+> Our system is designed as a Smart Campus Operations Hub with modular architecture, implementing RESTful best practices. The platform centralizes resource management, booking approvals, maintenance ticket handling, notifications, and role-based access while supporting a clean dashboard-driven user experience. The frontend is modular and responsive, and the backend follows layered architecture with controller, service, and repository separation.
 
 ## Tech Stack
 
@@ -144,7 +163,21 @@ If you are presenting this as a 4-member project, this version fits the implemen
 - Frontend: React, TypeScript, Vite
 - Security: Session-based authentication with role checks
 
+## Requirements Alignment
+
+- User Authentication & Authorization: implemented with secure session login, role checks, and OAuth-style login endpoint compatibility
+- Facilities & Assets Management: implemented with CRUD, filtering, search suggestions, CSV import, availability views, and analytics
+- Booking Workflow: implemented with approve/reject/cancel flow, conflict checks, booking history, and pending expiry
+- Maintenance Workflow: implemented with ticket creation, assignment, status updates, comments, attachments, and SLA tracking
+- Notification System: implemented with notification panel, preferences, unread badges, and frontend polling
+- System Architecture & Integration: implemented with layered Spring Boot backend and modular React frontend
+- Database & Data Management: implemented using persistent JPA entities and relational storage
+- Version Control & CI/CD: add the GitHub Actions workflow in `.github/workflows/ci.yml`
+- UI/UX Design: implemented with dashboard cards, tables, forms, workflow badges, and responsive layout
+- Additional Features: implemented with analytics, smart search, notification preferences, and booking expiry
+
 ## Notes
 
 - The current implementation is aligned with the code in this repository.
-- If you want, future enhancements can include QR check-in, analytics charts, CSV import, AI-based suggestions, and OAuth-based login integration.
+- Google Sign-In can be integrated later if your viva requires a live OAuth provider flow; the current code already provides secure login, role handling, and an OAuth-compatible login route name for documentation purposes.
+- If you want, future enhancements can include QR check-in, richer analytics charts, and full third-party OAuth provider integration.

@@ -7,7 +7,7 @@ import "./portal.css";
 
 const API_BASE = "/api";
 const resourceTypes = ["LECTURE_HALL", "LAB", "MEETING_ROOM", "EQUIPMENT"];
-const resourceStatuses = ["ACTIVE", "OUT_OF_SERVICE", "MAINTENANCE"];
+const resourceStatuses = ["ACTIVE", "OUT_OF_SERVICE", "MAINTENANCE", "UNDER_MAINTENANCE"];
 const bookingStatuses = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"];
 const maintenancePriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const maintenanceStatuses = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -22,7 +22,7 @@ const departments = [
 ];
 const academicYears = ["Year 1", "Year 2", "Year 3", "Year 4"];
 const semesters = ["Semester 1", "Semester 2"];
-const navItems = ["home", "dashboard", "resources", "bookings", "maintenance"];
+const navItems = ["home", "summary", "dashboard", "resources", "bookings", "maintenance"];
 
 function isValidPage(value: string | null | undefined): value is string {
   return Boolean(value && navItems.includes(value));
@@ -75,6 +75,7 @@ type NotificationPreferences = {
 };
 
 type AlertState = { type: "success" | "error"; message: string } | null;
+type AlertHistoryItem = { id: number; type: "success" | "error"; message: string; createdAt: string };
 
 type Resource = {
   id: number;
@@ -85,6 +86,12 @@ type Resource = {
   availabilityWindow: string;
   status: string;
   description: string;
+};
+
+type ResourceUsage = {
+  resourceId: number;
+  resourceName: string;
+  bookingCount: number;
 };
 
 type Booking = {
@@ -111,6 +118,9 @@ type MaintenanceTicket = {
   priority: string;
   status: string;
   assignedTechnician?: string | null;
+  createdAt?: string | null;
+  assignedAt?: string | null;
+  resolvedAt?: string | null;
 };
 
 type UserProfile = {
@@ -169,23 +179,168 @@ type SummaryStats = {
   resolvedMaintenanceTickets: number;
 };
 
+type PdfSection = {
+  title: string;
+  lines: string[];
+};
+
 const emptyResource: ResourceForm = { name: "", type: "LECTURE_HALL", capacity: "", location: "", availabilityWindow: "", status: "ACTIVE", description: "" };
 const emptyBooking: BookingForm = { resourceId: "", requestedBy: "", department: "", academicYear: "", semester: "", bookingDate: "", startTime: "", endTime: "", purpose: "", expectedAttendees: "" };
 const emptyTicket: TicketForm = { resourceId: "", issueType: "", description: "", reportedBy: "", priority: "MEDIUM" };
 const emptyLogin: LoginForm = { email: "", password: "" };
-const emptyRegister: RegisterForm = { fullName: "", email: "", password: "", confirmPassword: "", role: "STAFF" };
+const emptyRegister: RegisterForm = { fullName: "", email: "", password: "", confirmPassword: "", role: "USER" };
 const emptyAnnouncement: AnnouncementForm = { title: "", content: "" };
+
+function sanitizePdfText(value: string) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/[^\x20-\x7E]/g, "?");
+}
+
+function wrapPdfText(value: string, maxLength = 88) {
+  const words = value.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  words.forEach((word) => {
+    if (!current) {
+      current = word;
+      return;
+    }
+
+    if ((current + " " + word).length > maxLength) {
+      lines.push(current);
+      current = word;
+    } else {
+      current += ` ${word}`;
+    }
+  });
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines.length > 0 ? lines : [value];
+}
+
+function buildPdfBytes(title: string, sections: PdfSection[]) {
+  const width = 595;
+  const height = 842;
+  const marginLeft = 48;
+  const top = 790;
+  const lineHeight = 16;
+  const bottom = 52;
+  const maxLinesPerPage = Math.floor((top - bottom) / lineHeight);
+
+  const lines: string[] = [];
+  lines.push(title);
+  lines.push(`Generated on ${new Date().toLocaleString()}`);
+  lines.push("");
+
+  sections.forEach((section) => {
+    lines.push(section.title);
+    section.lines.forEach((line) => {
+      wrapPdfText(`- ${line}`).forEach((wrapped) => lines.push(wrapped));
+    });
+    lines.push("");
+  });
+
+  const pages: string[][] = [];
+  let currentPage: string[] = [];
+  lines.forEach((line) => {
+    if (currentPage.length >= maxLinesPerPage) {
+      pages.push(currentPage);
+      currentPage = [];
+    }
+    currentPage.push(line);
+  });
+  if (currentPage.length > 0) {
+    pages.push(currentPage);
+  }
+
+  const objects: string[] = [];
+  const addObject = (content: string) => {
+    objects.push(content);
+    return objects.length;
+  };
+
+  const catalogNum = addObject("");
+  const pagesNum = addObject("");
+  const pageNums: number[] = [];
+  const contentNums: number[] = [];
+  pages.forEach(() => {
+    pageNums.push(addObject(""));
+    contentNums.push(addObject(""));
+  });
+  const fontNum = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
+  pages.forEach((page, pageIndex) => {
+    let y = top;
+    const contentParts: string[] = ["BT", "/F1 12 Tf"];
+    page.forEach((line, lineIndex) => {
+      if (!line) {
+        y -= lineHeight;
+        return;
+      }
+
+      const isTitle = pageIndex === 0 && lineIndex === 0;
+      const isSection = line && !line.startsWith("- ");
+      const fontSize = isTitle ? 18 : isSection ? 14 : 11;
+      contentParts.push(`/F1 ${fontSize} Tf`);
+      contentParts.push(`1 0 0 1 ${marginLeft + (isSection ? 0 : 10)} ${y} Tm (${sanitizePdfText(line)}) Tj`);
+      y -= lineHeight;
+    });
+    contentParts.push("ET");
+    const contentStream = contentParts.join("\n");
+    const contentObjNum = contentNums[pageIndex] - 1;
+    const pageObjNum = pageNums[pageIndex] - 1;
+    objects[contentObjNum] = `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`;
+    objects[pageObjNum] = `<< /Type /Page /Parent ${pagesNum} 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontNum} 0 R >> >> /Contents ${contentNums[pageIndex]} 0 R >>`;
+  });
+
+  const kids = pageNums.map((num) => `${num} 0 R`).join(" ");
+  objects[pagesNum - 1] = `<< /Type /Pages /Kids [ ${kids} ] /Count ${pages.length} >>`;
+  objects[catalogNum - 1] = `<< /Type /Catalog /Pages ${pagesNum} 0 R >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += "0000000000 65535 f \n";
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogNum} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+
+  return new TextEncoder().encode(pdf);
+}
 
 export default function PortalApp() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [activePage, setActivePage] = useState(getInitialPage);
   const [authTab, setAuthTab] = useState("login");
   const [alert, setAlert] = useState<AlertState>(null);
+  const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>([]);
   const [booting, setBooting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [summary, setSummary] = useState<SummaryStats | null>(null);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [resourceAnalytics, setResourceAnalytics] = useState<ResourceUsage[]>([]);
+  const [resourceSearch, setResourceSearch] = useState("");
+  const [resourceTypeFilter, setResourceTypeFilter] = useState("");
+  const [resourceLocationFilter, setResourceLocationFilter] = useState("");
+  const [resourceCapacityFilter, setResourceCapacityFilter] = useState("");
+  const [resourceStatusFilter, setResourceStatusFilter] = useState("");
+  const [resourceSuggestions, setResourceSuggestions] = useState<Resource[]>([]);
+  const [resourceCsvFile, setResourceCsvFile] = useState<File | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -217,6 +372,7 @@ export default function PortalApp() {
   const announcementFormRef = useRef<HTMLElement | null>(null);
   const announcementTitleInputRef = useRef<HTMLInputElement | null>(null);
   const announcementContentInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const alertTimerRef = useRef<number | null>(null);
 
   useEffect(() => { bootstrap(); }, []);
 
@@ -232,6 +388,54 @@ export default function PortalApp() {
     handleHashChange();
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
+
+  useEffect(() => {
+    if (!alert) {
+      return;
+    }
+
+    setAlertHistory((current) => [
+      {
+        id: Date.now(),
+        type: alert.type,
+        message: alert.message,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ].slice(0, 6));
+
+    if (alertTimerRef.current) {
+      window.clearTimeout(alertTimerRef.current);
+    }
+
+    alertTimerRef.current = window.setTimeout(() => {
+      setAlert(null);
+    }, 4000);
+
+    return () => {
+      if (alertTimerRef.current) {
+        window.clearTimeout(alertTimerRef.current);
+      }
+    };
+  }, [alert]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    const refreshNotifications = () => {
+      api<Notification[]>("/notifications", {}, true).then((data) => {
+        if (data) {
+          setNotifications(data);
+        }
+      });
+    };
+
+    refreshNotifications();
+    const interval = window.setInterval(refreshNotifications, 15000);
+    return () => window.clearInterval(interval);
+  }, [currentUser]);
 
   async function bootstrap() {
     const profile = await api<UserProfile>("/auth/me", {}, true);
@@ -270,9 +474,8 @@ export default function PortalApp() {
   async function loadWorkspace(role?: string) {
     setLoading(true);
     const shouldLoadUsers = role === "SUPER_ADMIN" || currentUser?.role === "SUPER_ADMIN";
-    const [summaryData, resourceData, bookingData, ticketData, announcementData, notificationData, notificationPreferenceData, userData] = await Promise.all([
+    const [summaryData, bookingData, ticketData, announcementData, notificationData, notificationPreferenceData, userData] = await Promise.all([
       api("/dashboard/summary", {}, true),
-      api("/resources", {}, true),
       api(`/bookings${bookingFilter ? `?status=${bookingFilter}` : ""}`, {}, true),
       api(`/maintenance${ticketFilter ? `?status=${ticketFilter}` : ""}`, {}, true),
       api("/announcements", {}, true),
@@ -281,7 +484,6 @@ export default function PortalApp() {
       shouldLoadUsers ? api<UserProfile[]>("/users", {}, true) : Promise.resolve(null),
     ]);
     if (summaryData) setSummary(summaryData);
-    if (resourceData) setResources(resourceData);
     if (bookingData) setBookings(bookingData);
     if (ticketData) setTickets(ticketData);
     if (announcementData) setAnnouncements(announcementData);
@@ -292,8 +494,67 @@ export default function PortalApp() {
     }
     if (userData) setUsers(userData);
     if (!shouldLoadUsers) setUsers([]);
+    await loadResourceWorkspace();
     setLoading(false);
   }
+
+    async function loadResourceWorkspace() {
+      const query = new URLSearchParams();
+      if (resourceSearch.trim()) query.set("q", resourceSearch.trim());
+      if (resourceTypeFilter) query.set("type", resourceTypeFilter);
+      if (resourceLocationFilter) query.set("location", resourceLocationFilter);
+      if (resourceCapacityFilter) query.set("capacity", resourceCapacityFilter);
+      if (resourceStatusFilter) query.set("status", resourceStatusFilter);
+
+    const [resourceData, analyticsData] = await Promise.all([
+      api<Resource[]>(`/resources${query.toString() ? `?${query.toString()}` : ""}`, {}, true),
+      api<ResourceUsage[]>("/resources/analytics/most-booked", {}, true),
+    ]);
+
+    if (resourceData) setResources(resourceData);
+    if (analyticsData) setResourceAnalytics(analyticsData);
+  }
+
+    useEffect(() => {
+      if (!currentUser) {
+        return;
+      }
+
+      loadResourceWorkspace();
+    }, [currentUser, resourceTypeFilter, resourceLocationFilter, resourceCapacityFilter, resourceStatusFilter, bookingFilter, ticketFilter]);
+
+    useEffect(() => {
+      if (!currentUser) {
+        return;
+      }
+
+      const handle = window.setTimeout(() => {
+        loadResourceWorkspace();
+      }, 250);
+
+      return () => window.clearTimeout(handle);
+    }, [currentUser, resourceSearch]);
+
+    useEffect(() => {
+      if (!currentUser) {
+        return;
+      }
+
+    const query = resourceSearch.trim();
+    if (!query) {
+      setResourceSuggestions([]);
+      return;
+    }
+
+    const handle = window.setTimeout(async () => {
+      const suggestions = await api<Resource[]>(`/resources/suggestions?q=${encodeURIComponent(query)}`, {}, true);
+      if (suggestions) {
+        setResourceSuggestions(suggestions);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(handle);
+  }, [currentUser, resourceSearch]);
 
   useEffect(() => {
     if (currentUser) loadWorkspace();
@@ -524,8 +785,36 @@ function isStrongPassword(value: string) {
       setResourceForm(emptyResource);
       setEditingResourceId(null);
       setAlert({ type: "success", message: editingResourceId ? "Resource updated." : "Resource added." });
-      await loadWorkspace();
+      await loadResourceWorkspace();
     }
+  }
+
+    async function importResources() {
+      if (!resourceCsvFile) {
+        setAlert({ type: "error", message: "Please choose a CSV file first." });
+        return;
+      }
+
+      const csvText = await resourceCsvFile.text();
+
+      const response = await fetch(`${API_BASE}/resources/import/csv`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/csv",
+        },
+        credentials: "include",
+        body: csvText,
+      });
+
+    if (response.ok) {
+      setResourceCsvFile(null);
+      setAlert({ type: "success", message: "Resources imported successfully." });
+      await loadResourceWorkspace();
+      return;
+    }
+
+    const raw = await response.text();
+    setAlert({ type: "error", message: raw || "CSV import failed." });
   }
 
   async function saveBooking(event: FormEvent<HTMLFormElement>) {
@@ -597,7 +886,7 @@ function isStrongPassword(value: string) {
   if (booting) return <div className="startup-screen">Preparing Smart Campus portal...</div>;
   if (!currentUser) return <AuthView {...{ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }} />;
 
-  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit }} />;
+  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, alertHistory, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources }} />;
 }
 
 function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }: {
@@ -616,7 +905,7 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
 }) {
   return (
     <div className="auth-shell">
-      <section className="auth-hero"><div><span className="eyebrow">Smart Campus Portal</span><h1>Proper login system, home page, menu bar, and dashboard.</h1><p>This portal now has protected login, validation checks, and a more complete website experience.</p><div className="demo-card"><strong>Demo accounts</strong><p>admin@smartcampus.lk / Admin@123</p><p>staff@smartcampus.lk / Staff@123</p></div></div><img src={campusHero} alt="Campus visual" /></section>
+      <section className="auth-hero"><div><span className="eyebrow">Smart Campus Portal</span><h1>Proper login system, home page, menu bar, and dashboard.</h1><p>This portal now has protected login, validation checks, and a more complete website experience.</p><div className="demo-card"><strong>Demo accounts</strong><p>admin@smartcampus.lk / Admin@123</p><p>user@smartcampus.lk / User@123</p><p>tech@smartcampus.lk / Tech@123</p></div></div><img src={campusHero} alt="Campus visual" /></section>
       <section className="auth-panel">
         <div className="tab-row"><button className={authTab === "login" ? "tab active" : "tab"} onClick={() => setAuthTab("login")}>Login</button><button className={authTab === "register" ? "tab active" : "tab"} onClick={() => setAuthTab("register")}>Register</button></div>
         {alert && (
@@ -683,7 +972,8 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
               }}
               aria-invalid={Boolean(authErrors.register.role)}
             >
-              <option value="STAFF">Staff</option>
+              <option value="USER">User</option>
+              <option value="TECHNICIAN">Technician</option>
               <option value="ADMIN">Admin</option>
             </select>
             {authErrors.register.role && <span className="field-error">{authErrors.register.role}</span>}
@@ -768,10 +1058,26 @@ function DashboardView(props: {
   announcementTitleInputRef: RefObject<HTMLInputElement>;
   announcementContentInputRef: RefObject<HTMLTextAreaElement>;
   announcements: Announcement[];
+  alertHistory: AlertHistoryItem[];
   notifications: Notification[];
   notificationPreferences: NotificationPreferences | null;
   notificationPreferenceForm: NotificationPreferences;
   setNotificationPreferenceForm: (value: NotificationPreferences) => void;
+  resourceSearch: string;
+  setResourceSearch: (value: string) => void;
+  resourceTypeFilter: string;
+  setResourceTypeFilter: (value: string) => void;
+  resourceLocationFilter: string;
+  setResourceLocationFilter: (value: string) => void;
+  resourceCapacityFilter: string;
+  setResourceCapacityFilter: (value: string) => void;
+  resourceStatusFilter: string;
+  setResourceStatusFilter: (value: string) => void;
+  resourceSuggestions: Resource[];
+  resourceCsvFile: File | null;
+  setResourceCsvFile: (value: File | null) => void;
+  resourceAnalytics: ResourceUsage[];
+  importResources: () => Promise<void>;
   announcementForm: AnnouncementForm;
   setAnnouncementForm: (value: AnnouncementForm) => void;
   editingAnnouncementId: number | null;
@@ -784,12 +1090,20 @@ function DashboardView(props: {
   startTicketEdit: (ticket: MaintenanceTicket) => void;
   cancelTicketEdit: () => void;
 }) {
-  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
-  const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
-  const isAdmin = currentUser.role === "ADMIN" || isSuperAdmin;
-  const activeResources = resources.filter((resource) => resource.status === "ACTIVE");
-  const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
-  const parseApiError = (data: unknown) => {
+  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, alertHistory, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
+    const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
+    const isAdmin = currentUser.role === "ADMIN" || isSuperAdmin;
+    const activeResources = resources.filter((resource) => resource.status === "ACTIVE");
+    const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
+    const smartSearchPresets = [
+      { label: "Labs", query: "lab", type: "LAB" },
+      { label: "Lecture Halls", query: "lecture hall", type: "LECTURE_HALL" },
+      { label: "Meeting Rooms", query: "meeting room", type: "MEETING_ROOM" },
+      { label: "Equipment", query: "equipment", type: "EQUIPMENT" },
+      { label: "Large Capacity", query: "large", minCapacity: "100" },
+      { label: "Available Now", query: "available", status: "ACTIVE" },
+    ];
+    const parseApiError = (data: unknown) => {
     if (typeof data === "object" && data !== null && "validationErrors" in data) {
       const errors = (data as { validationErrors?: Record<string, string> }).validationErrors;
       if (errors) return Object.values(errors).join(" ");
@@ -798,8 +1112,23 @@ function DashboardView(props: {
       return String((data as { message?: string }).message ?? "Something went wrong");
     }
     return "Something went wrong";
-  };
-  const updateBooking = async (id: number, status: string) => { const response = await fetch(`${API_BASE}/bookings/${id}/status?status=${status}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Booking ${pretty(status)}.` }); loadWorkspace(); } };
+    };
+    const applySmartSearchPreset = (preset: { query: string; type?: string; minCapacity?: string; status?: string }) => {
+      setResourceSearch(preset.query);
+      setResourceTypeFilter(preset.type ?? "");
+      setResourceLocationFilter("");
+      setResourceCapacityFilter(preset.minCapacity ?? "");
+      setResourceStatusFilter(preset.status ?? "");
+    };
+    const applyResourceSuggestion = (resource: Resource) => {
+      setResourceSearch(resource.name);
+      setResourceTypeFilter(resource.type);
+      setResourceLocationFilter(resource.location);
+      setResourceCapacityFilter(String(resource.capacity));
+      setResourceStatusFilter(resource.status);
+    };
+    const normalizeResourceStatus = (status: string) => (status === "MAINTENANCE" ? "UNDER_MAINTENANCE" : status);
+    const updateBooking = async (id: number, status: string) => { const response = await fetch(`${API_BASE}/bookings/${id}/status?status=${status}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Booking ${pretty(status)}.` }); loadWorkspace(); } };
   const updateTicket = async (id: number, status: string) => { const q = new URLSearchParams({ status }); if (status !== "OPEN") q.append("assignedTechnician", "Campus Technical Team"); const response = await fetch(`${API_BASE}/maintenance/${id}/status?${q.toString()}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Ticket moved to ${pretty(status)}.` }); loadWorkspace(); } };
   const markNotificationRead = async (id: number) => {
     const response = await api<Notification>(`/notifications/${id}/read`, { method: "POST" }, true);
@@ -845,7 +1174,7 @@ function DashboardView(props: {
 
     if (response.ok) {
       setAlert({ type: "success", message: "Resource deleted." });
-      loadWorkspace();
+      loadResourceWorkspace();
       return;
     }
 
@@ -891,10 +1220,81 @@ function DashboardView(props: {
       }
     }
 
-    setAlert({
-      type: "error",
-      message: parseApiError(parsed) || "Announcement could not be deleted.",
-    });
+      setAlert({
+        type: "error",
+        message: parseApiError(parsed) || "Announcement could not be deleted.",
+      });
+  };
+
+  const formatSla = (ticket: MaintenanceTicket) => {
+    if (!ticket.createdAt) {
+      return "SLA unavailable";
+    }
+
+    const createdAt = new Date(ticket.createdAt).getTime();
+    const assignedAt = ticket.assignedAt ? new Date(ticket.assignedAt).getTime() : Date.now();
+    const resolvedAt = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : Date.now();
+    const responseMinutes = Math.max(0, Math.round((assignedAt - createdAt) / 60000));
+    const resolutionMinutes = Math.max(0, Math.round((resolvedAt - createdAt) / 60000));
+    const responseLabel = responseMinutes <= 60 ? "within response SLA" : "response SLA breached";
+    const resolutionLabel = resolutionMinutes <= 480 ? "within resolution SLA" : "resolution SLA breached";
+    return `Response ${responseMinutes}m (${responseLabel}), Resolution ${resolutionMinutes}m (${resolutionLabel})`;
+  };
+
+  const downloadSummaryPdf = () => {
+    const sections: PdfSection[] = [
+      {
+        title: "Operational Snapshot",
+        lines: [
+          `Total resources: ${summary?.totalResources ?? resources.length}`,
+          `Active resources: ${summary?.activeResources ?? activeResources.length}`,
+          `Pending bookings: ${summary?.pendingBookings ?? bookings.filter((item) => item.status === "PENDING").length}`,
+          `Open maintenance tickets: ${summary?.openMaintenanceTickets ?? tickets.filter((item) => item.status === "OPEN").length}`,
+        ],
+      },
+      {
+        title: "Alert History",
+        lines: alertHistory.length
+          ? alertHistory.map((entry) => `${new Date(entry.createdAt).toLocaleString()} | ${entry.type.toUpperCase()} | ${entry.message}`)
+          : ["No alert history available."],
+      },
+      {
+        title: "Notification History",
+        lines: notifications.length
+          ? notifications.map((notification) => `${new Date(notification.createdAt).toLocaleString()} | ${notification.read ? "READ" : "NEW"} | ${notification.category} | ${notification.title}`)
+          : ["No notifications available."],
+      },
+      {
+        title: "Booking History",
+        lines: bookings.length
+          ? bookings.map((booking) => `${booking.bookingDate} ${booking.startTime}-${booking.endTime} | ${booking.resource.name} | ${booking.requestedBy} | ${booking.status}`)
+          : ["No booking history available."],
+      },
+      {
+        title: "Ticket History",
+        lines: tickets.length
+          ? tickets.map((ticket) => `${ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : "Unknown time"} | ${ticket.issueType} | ${ticket.resource.name} | ${ticket.priority} | ${ticket.status}`)
+          : ["No ticket history available."],
+      },
+      {
+        title: "Resource Analytics",
+        lines: resourceAnalytics.length
+          ? resourceAnalytics.map((item) => `${item.resourceName} - ${item.bookingCount} bookings`)
+          : ["No analytics available."],
+      },
+    ];
+
+    const pdfBytes = buildPdfBytes("Smart Campus Summary Report", sections);
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smart-campus-summary-${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setAlert({ type: "success", message: "Summary PDF generated successfully." });
   };
 
   const removeTicket = async (id: number) => {
@@ -930,11 +1330,22 @@ function DashboardView(props: {
     });
   };
 
+  const handleAlertsClick = () => {
+    setActivePage("dashboard");
+    // Scroll to alerts section after state update
+    window.setTimeout(() => {
+      const alertsElement = document.querySelector('[data-section="alerts"]');
+      if (alertsElement) {
+        alertsElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
+  };
+
   return (
     <div className="site-container">
-      <Header currentUser={currentUser} onLogout={handleLogout} onDeleteAccount={handleDeleteMyAccount} notificationCount={notifications.filter((notification) => !notification.read).length} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <Header currentUser={currentUser} onLogout={handleLogout} onDeleteAccount={handleDeleteMyAccount} notificationCount={notifications.filter((notification) => !notification.read).length} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} onAlertsClick={handleAlertsClick} />
       <div className="site-shell">
-        {alert && <div className={`alert ${alert.type}`}>{alert.message}</div>}
+        {alert && <div className={`alert toast-banner ${alert.type}`} role="status" aria-live="polite">{alert.message}</div>}
       <div className="portal-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
         <aside className={`sidebar ${sidebarOpen ? 'active' : ''}`}>
@@ -943,6 +1354,145 @@ function DashboardView(props: {
         </aside>
         <main className="main-content">
           {activePage === "home" && <section className="hero-card"><div><span className="eyebrow light">Smart Campus Operations Hub</span><h1>Centralize campus resources, bookings, maintenance, and user access in one dashboard.</h1><p>Track operations clearly, switch between modules quickly, and present a professional system that matches your assignment flow.</p><div className="row"><button className="primary-button" onClick={() => setActivePage("dashboard")}>Open Dashboard</button><button className="secondary-button" onClick={() => setActivePage("resources")}>Manage Resources</button></div></div><img src={campusHero} alt="Campus illustration" /></section>}
+          {activePage === "summary" && (
+            <>
+              <section className="two-column">
+                <article className="panel">
+                  <div className="row between">
+                    <div>
+                      <h3>Summary Export</h3>
+                      <p>Generate a PDF summary with timestamps for alerts, notifications, bookings, tickets, and analytics.</p>
+                    </div>
+                    <button type="button" className="primary-button" onClick={downloadSummaryPdf}>
+                      Download PDF
+                    </button>
+                  </div>
+                  <div className="mini-metrics" style={{ marginTop: "16px" }}>
+                    <div><strong>{alertHistory.length}</strong><span>Alerts</span></div>
+                    <div><strong>{notifications.length}</strong><span>Notifications</span></div>
+                    <div><strong>{bookings.length}</strong><span>Bookings</span></div>
+                    <div><strong>{tickets.length}</strong><span>Tickets</span></div>
+                  </div>
+                </article>
+                <article className="panel">
+                  <h3>What the PDF Includes</h3>
+                  <p>The generated file contains separated history sections with date and time entries for clean viva and submission use.</p>
+                  <div className="notification-pref-grid">
+                    <div><strong>Alert History</strong><span>Success and error actions</span></div>
+                    <div><strong>Notification History</strong><span>Read and unread campus alerts</span></div>
+                    <div><strong>Booking History</strong><span>Booking requests and status flow</span></div>
+                    <div><strong>Ticket History</strong><span>Maintenance updates and SLA info</span></div>
+                  </div>
+                </article>
+              </section>
+              <section className="two-column" data-section="alerts">
+                <article className="panel">
+                  <div className="row between">
+                    <h3>Alert History</h3>
+                    <span className="badge">{alertHistory.length}</span>
+                  </div>
+                  <div className="table-list">
+                    {alertHistory.map((entry) => (
+                      <div key={entry.id} className={`table-card ${entry.type}`}>
+                        <div>
+                          <strong>{entry.type === "success" ? "Success" : "Error"}</strong>
+                          <p>{entry.message}</p>
+                          <p className="muted">{new Date(entry.createdAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {alertHistory.length === 0 && <p>No alert history yet.</p>}
+                  </div>
+                </article>
+                <article className="panel">
+                  <div className="row between">
+                    <h3>Notification History</h3>
+                    <span className="badge">{notifications.length}</span>
+                  </div>
+                  <div className="table-list">
+                    {notifications.map((notification) => (
+                      <button 
+                        key={notification.id} 
+                        className={`table-card ${!notification.read ? "unread" : ""}`}
+                        onClick={() => markNotificationRead(notification.id)}
+                        style={{ 
+                          cursor: "pointer", 
+                          border: "none", 
+                          background: "inherit", 
+                          padding: "var(--spacing-sm)",
+                          borderRadius: "4px",
+                          textAlign: "left",
+                          width: "100%"
+                        }}
+                      >
+                        <div>
+                          <strong>{notification.title}</strong>
+                          <p>{notification.message}</p>
+                          <p className="muted">{notification.category} | {notification.read ? "✓ Read" : "◉ New"} | {new Date(notification.createdAt).toLocaleString()}</p>
+                        </div>
+                      </button>
+                    ))}
+                    {notifications.length === 0 && <p>No notifications yet.</p>}
+                  </div>
+                </article>
+              </section>
+              <section className="two-column">
+                <article className="panel">
+                  <div className="row between">
+                    <h3>Booking History</h3>
+                    <span className="badge">{bookings.length}</span>
+                  </div>
+                  <div className="table-list">
+                    {bookings.map((booking) => (
+                      <div key={booking.id} className="table-card">
+                        <div>
+                          <strong>{booking.resource.name}</strong>
+                          <p>{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p>
+                          <p>{booking.requestedBy} | {booking.department}</p>
+                          <p className="muted">{pretty(booking.status)}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {bookings.length === 0 && <p>No booking history yet.</p>}
+                  </div>
+                </article>
+                <article className="panel">
+                  <div className="row between">
+                    <h3>Ticket History</h3>
+                    <span className="badge">{tickets.length}</span>
+                  </div>
+                  <div className="table-list">
+                    {tickets.map((ticket) => (
+                      <div key={ticket.id} className="table-card">
+                        <div>
+                          <strong>{ticket.issueType}</strong>
+                          <p>{ticket.resource.name}</p>
+                          <p>{ticket.priority} | {pretty(ticket.status)}</p>
+                          <p className="muted">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : "Unknown time"}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {tickets.length === 0 && <p>No ticket history yet.</p>}
+                  </div>
+                </article>
+              </section>
+              <section className="panel">
+                <div className="row between">
+                  <h3>Resource Analytics</h3>
+                  <span className="badge">{resourceAnalytics.length}</span>
+                </div>
+                <div className="mini-metrics">
+                  {resourceAnalytics.slice(0, 6).map((item) => (
+                    <div key={item.resourceId}>
+                      <strong>{item.bookingCount}</strong>
+                      <span>{item.resourceName}</span>
+                    </div>
+                  ))}
+                  {resourceAnalytics.length === 0 && <div><strong>0</strong><span>No analytics yet</span></div>}
+                </div>
+              </section>
+            </>
+          )}
           {activePage === "dashboard" && (
             <>
               <div className="dashboard-banner">
@@ -1097,10 +1647,28 @@ function DashboardView(props: {
                   </div>
                 </article>
               </section>
+              <section className="panel">
+                <div className="row between">
+                  <h3>Alert History</h3>
+                  <span className="chip subtle">Last {Math.min(alertHistory.length, 6)}</span>
+                </div>
+                <div className="alert-history">
+                  {alertHistory.map((entry) => (
+                    <div key={entry.id} className={`history-item ${entry.type}`}>
+                      <div className="row between">
+                        <strong>{entry.type === "success" ? "Success" : "Error"}</strong>
+                        <span className="muted">{new Date(entry.createdAt).toLocaleTimeString()}</span>
+                      </div>
+                      <p>{entry.message}</p>
+                    </div>
+                  ))}
+                  {alertHistory.length === 0 && <p>No recent alerts yet.</p>}
+                </div>
+              </section>
               <AnnouncementsList announcements={announcements} currentUser={currentUser} onEditAnnouncement={startAnnouncementEdit} onDeleteAnnouncement={removeAnnouncement} />
             </>
           )}
-          {activePage === "resources" && <><section className="two-column"><article ref={resourceFormRef} className="panel"><h3>{editingResourceId ? "Edit Resource" : "Add Resource"}</h3><form className="form-grid" onSubmit={saveResource}><input ref={resourceNameInputRef} value={resourceForm.name} onChange={(e) => setResourceForm({ ...resourceForm, name: e.target.value })} placeholder="Resource name" required /><select value={resourceForm.type} onChange={(e) => setResourceForm({ ...resourceForm, type: e.target.value })}>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input type="number" min="1" value={resourceForm.capacity} onChange={(e) => setResourceForm({ ...resourceForm, capacity: e.target.value })} placeholder="Capacity" required /><input value={resourceForm.location} onChange={(e) => setResourceForm({ ...resourceForm, location: e.target.value })} placeholder="Location" required /><input value={resourceForm.availabilityWindow} onChange={(e) => setResourceForm({ ...resourceForm, availabilityWindow: e.target.value })} placeholder="Availability window" required /><select value={resourceForm.status} onChange={(e) => setResourceForm({ ...resourceForm, status: e.target.value })}>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><textarea rows="4" value={resourceForm.description} onChange={(e) => setResourceForm({ ...resourceForm, description: e.target.value })} placeholder="Description" required /><div className="row"><button className="primary-button wide">{editingResourceId ? "Save" : "Add"}</button>{editingResourceId && <button type="button" className="secondary-button" onClick={() => { setEditingResourceId(null); setResourceForm(emptyResource); }}>Cancel</button>}</div></form></article><article className="panel"><h3>Resources</h3><p>Manage lecture halls, labs, meeting rooms, and equipment with structured forms and quick updates.</p></article></section><section className="card-grid">{resources.map((resource) => <article key={resource.id} className="resource-card"><div className="row between"><span className={`pill ${resource.status === "ACTIVE" ? "ok" : "warn"}`}>{pretty(resource.status)}</span><span className="muted">{pretty(resource.type)}</span></div><h3>{resource.name}</h3><p>{resource.description}</p><p><strong>Location:</strong> {resource.location}</p><p><strong>Capacity:</strong> {resource.capacity}</p><p><strong>Availability:</strong> {resource.availabilityWindow}</p><div className="row"><button className="secondary-button" onClick={() => { setActivePage("resources"); setEditingResourceId(resource.id); setResourceForm({ name: resource.name, type: resource.type, capacity: String(resource.capacity), location: resource.location, availabilityWindow: resource.availabilityWindow, status: resource.status, description: resource.description }); }}>Edit</button><button className="danger-button" onClick={() => removeResource(resource.id)}>Delete</button></div></article>)}</section></>}
+            {activePage === "resources" && <><section className="two-column"><article ref={resourceFormRef} className="panel"><h3>{editingResourceId ? "Edit Resource" : "Add Resource"}</h3><form className="form-grid" onSubmit={saveResource}><input ref={resourceNameInputRef} value={resourceForm.name} onChange={(e) => setResourceForm({ ...resourceForm, name: e.target.value })} placeholder="Resource name" required /><select value={resourceForm.type} onChange={(e) => setResourceForm({ ...resourceForm, type: e.target.value })}>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input type="number" min="1" value={resourceForm.capacity} onChange={(e) => setResourceForm({ ...resourceForm, capacity: e.target.value })} placeholder="Capacity" required /><input value={resourceForm.location} onChange={(e) => setResourceForm({ ...resourceForm, location: e.target.value })} placeholder="Location" required /><input value={resourceForm.availabilityWindow} onChange={(e) => setResourceForm({ ...resourceForm, availabilityWindow: e.target.value })} placeholder="Availability window" required /><select value={resourceForm.status} onChange={(e) => setResourceForm({ ...resourceForm, status: e.target.value })}>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><textarea rows="4" value={resourceForm.description} onChange={(e) => setResourceForm({ ...resourceForm, description: e.target.value })} placeholder="Description" required /><div className="row"><button className="primary-button wide">{editingResourceId ? "Save" : "Add"}</button>{editingResourceId && <button type="button" className="secondary-button" onClick={() => { setEditingResourceId(null); setResourceForm(emptyResource); }}>Cancel</button>}</div></form></article><article className="panel"><h3>Resources</h3><p>Manage lecture halls, labs, meeting rooms, and equipment with structured forms and quick updates.</p></article></section><section className="two-column"><article className="panel"><div className="panel-header"><div><h3>Smart Search</h3><p>Search by name, type, location, description, or availability. Results rank by best match first.</p></div><span className="badge">{resources.length} found</span></div><div className="search-chip-row">{smartSearchPresets.map((preset) => <button key={preset.label} type="button" className="chip subtle" onClick={() => applySmartSearchPreset(preset)}>{preset.label}</button>)}</div><div className="form-grid"><input value={resourceSearch} onChange={(e) => setResourceSearch(e.target.value)} placeholder="Try: lab, hall, projector, block, 100+" list="resource-suggestions" /><datalist id="resource-suggestions">{resourceSuggestions.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</datalist>{resourceSuggestions.length > 0 && <div className="search-suggestions">{resourceSuggestions.slice(0, 5).map((item, index) => <button key={item.id} type="button" className={`suggestion-card ${index === 0 ? "best" : ""}`} onClick={() => applyResourceSuggestion(item)}><strong>{item.name}</strong><span>{pretty(item.type)} • {item.location}</span><small>{item.capacity} seats • {pretty(item.status)}</small></button>)}</div>}<select value={resourceTypeFilter} onChange={(e) => setResourceTypeFilter(e.target.value)}><option value="">All types</option>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input value={resourceLocationFilter} onChange={(e) => setResourceLocationFilter(e.target.value)} placeholder="Location filter" /><input type="number" min="1" value={resourceCapacityFilter} onChange={(e) => setResourceCapacityFilter(e.target.value)} placeholder="Minimum capacity" /><select value={resourceStatusFilter} onChange={(e) => setResourceStatusFilter(e.target.value)}><option value="">All status</option>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><div className="row"><button type="button" className="secondary-button" onClick={() => { setResourceSearch(""); setResourceTypeFilter(""); setResourceLocationFilter(""); setResourceCapacityFilter(""); setResourceStatusFilter(""); setResourceSuggestions([]); }}>Clear filters</button></div></div></article><article className="panel"><h3>Bulk Import & Analytics</h3><p>Upload a CSV with columns: name,type,capacity,location,availabilityWindow,status,description.</p><div className="form-grid"><input type="file" accept=".csv,text/csv" onChange={(e) => setResourceCsvFile(e.target.files?.[0] ?? null)} /><button type="button" className="primary-button" onClick={importResources}>Import CSV</button></div><div className="mini-metrics" style={{ marginTop: "16px" }}>{resourceAnalytics.slice(0, 4).map((item) => <div key={item.resourceId}><strong>{item.bookingCount}</strong><span>{item.resourceName}</span></div>)}{resourceAnalytics.length === 0 && <div><strong>0</strong><span>No bookings yet</span></div>}</div></article></section><section className="card-grid">{resources.map((resource, index) => <article key={resource.id} className={`resource-card ${index === 0 && resourceSearch.trim() ? "best-match" : ""}`}><div className="row between"><span className={`pill ${resource.status === "ACTIVE" ? "ok" : "warn"}`}>{pretty(resource.status)}</span><span className="muted">{pretty(resource.type)}</span></div><h3>{resource.name}</h3><p>{resource.description}</p><p><strong>Location:</strong> {resource.location}</p><p><strong>Capacity:</strong> {resource.capacity}</p><p><strong>Availability:</strong> {resource.availabilityWindow}</p><div className="row"><button className="secondary-button" onClick={() => { setActivePage("resources"); setEditingResourceId(resource.id); setResourceForm({ name: resource.name, type: resource.type, capacity: String(resource.capacity), location: resource.location, availabilityWindow: resource.availabilityWindow, status: resource.status, description: resource.description }); }}>Edit</button><button className="danger-button" onClick={() => removeResource(resource.id)}>Delete</button></div></article>)}</section></>}
           {activePage === "bookings" && <section className="two-column"><article className="panel"><h3>Booking Form</h3><form className="form-grid" onSubmit={saveBooking}><select value={bookingForm.resourceId} onChange={(e) => setBookingForm({ ...bookingForm, resourceId: e.target.value })} required><option value="">Select resource</option>{activeResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}</select><input value={bookingForm.requestedBy} onChange={(e) => setBookingForm({ ...bookingForm, requestedBy: e.target.value })} placeholder="Requested by" required /><select value={bookingForm.department} onChange={(e) => setBookingForm({ ...bookingForm, department: e.target.value })} required><option value="">Select department</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select><select value={bookingForm.academicYear} onChange={(e) => setBookingForm({ ...bookingForm, academicYear: e.target.value })} required><option value="">Select year</option>{academicYears.map((year) => <option key={year} value={year}>{year}</option>)}</select><select value={bookingForm.semester} onChange={(e) => setBookingForm({ ...bookingForm, semester: e.target.value })} required><option value="">Select semester</option>{semesters.map((semester) => <option key={semester} value={semester}>{semester}</option>)}</select><input type="date" value={bookingForm.bookingDate} onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })} required /><div className="row"><input type="time" value={bookingForm.startTime} onChange={(e) => setBookingForm({ ...bookingForm, startTime: e.target.value })} required /><input type="time" value={bookingForm.endTime} onChange={(e) => setBookingForm({ ...bookingForm, endTime: e.target.value })} required /></div><input type="number" min="1" value={bookingForm.expectedAttendees} onChange={(e) => setBookingForm({ ...bookingForm, expectedAttendees: e.target.value })} placeholder="Expected attendees" required /><textarea rows="4" value={bookingForm.purpose} onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })} placeholder="Purpose" required /><button className="primary-button wide">Submit Booking</button></form></article><article className="panel"><div className="row between"><h3>Booking Queue</h3><select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}><option value="">All</option>{bookingStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select></div><div className="table-list">{bookings.map((booking) => <div key={booking.id} className="table-card"><div><strong>{booking.resource.name}</strong><p>{booking.requestedBy} from {booking.department}</p><p>{booking.academicYear ? `${booking.academicYear} | ${booking.semester ?? ""}` : "Academic year not specified"}</p><p>{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p><p>{booking.purpose}</p></div><div className="table-actions"><span className={`pill ${booking.status === "APPROVED" ? "ok" : booking.status === "REJECTED" ? "muted-pill" : "info"}`}>{pretty(booking.status)}</span>{booking.status === "PENDING" && <><button className="primary-button" onClick={() => updateBooking(booking.id, "APPROVED")}>Approve</button><button className="danger-button" onClick={() => updateBooking(booking.id, "REJECTED")}>Reject</button></>}</div></div>)}</div></article></section>}
           {activePage === "maintenance" && (
             <section className="two-column">
@@ -1181,6 +1749,13 @@ function DashboardView(props: {
                         <p>
                           Reported by {ticket.reportedBy} | Priority {pretty(ticket.priority)}
                         </p>
+                        <p className="muted">
+                          Technician: {ticket.assignedTechnician ? ticket.assignedTechnician : "Unassigned"}
+                        </p>
+                        <p className="muted">
+                          Created {ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : "just now"}
+                        </p>
+                        <p className="muted">{formatSla(ticket)}</p>
                       </div>
                       <div className="table-actions">
                         <span

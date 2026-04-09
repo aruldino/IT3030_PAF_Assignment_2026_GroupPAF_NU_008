@@ -36,6 +36,11 @@ public class BookingController {
         return bookingService.getBookings(status);
     }
 
+    @GetMapping("/history")
+    public List<Booking> getHistory() {
+        return bookingService.getBookingHistory();
+    }
+
     @GetMapping("/my")
     public List<Booking> getMyBookings(HttpSession session) {
         return bookingService.getMyBookings(session);
@@ -70,6 +75,11 @@ public class BookingController {
     @PutMapping("/{id}/cancel")
     public Booking cancelBooking(@PathVariable Long id) {
         return bookingService.cancelBooking(id);
+    }
+
+    @PutMapping("/expire-pending")
+    public List<Booking> expirePendingBookings() {
+        return bookingService.expirePendingBookings();
     }
 
     @PatchMapping("/{id}/status")

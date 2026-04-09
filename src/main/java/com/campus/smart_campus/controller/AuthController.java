@@ -37,6 +37,11 @@ public class AuthController {
         return authService.login(request, session);
     }
 
+    @PostMapping("/login/oauth")
+    public UserProfileResponse oauthLogin(@Valid @RequestBody LoginRequest request, HttpSession session) {
+        return authService.login(request, session);
+    }
+
     @GetMapping("/me")
     public UserProfileResponse me(HttpSession session) {
         return authService.getCurrentUser(session);

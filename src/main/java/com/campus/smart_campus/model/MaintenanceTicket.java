@@ -47,6 +47,8 @@ public class MaintenanceTicket {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    private LocalDateTime assignedAt;
+
     private LocalDateTime resolvedAt;
 
     public Long getId() {
@@ -119,6 +121,14 @@ public class MaintenanceTicket {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getAssignedAt() {
+        return assignedAt;
+    }
+
+    public void setAssignedAt(LocalDateTime assignedAt) {
+        this.assignedAt = assignedAt;
     }
 
     public LocalDateTime getResolvedAt() {
