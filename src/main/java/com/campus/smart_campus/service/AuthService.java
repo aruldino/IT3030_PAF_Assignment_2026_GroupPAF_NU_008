@@ -1,0 +1,194 @@
+package com.campus.smart_campus.service;
+
+import com.campus.smart_campus.dto.LoginRequest;
+import com.campus.smart_campus.dto.RegisterRequest;
+import com.campus.smart_campus.dto.UserProfileResponse;
+import com.campus.smart_campus.exception.BusinessException;
+import com.campus.smart_campus.exception.NotFoundException;
+import com.campus.smart_campus.exception.UnauthorizedException;
+import com.campus.smart_campus.model.AppUser;
+import com.campus.smart_campus.model.UserRole;
+import com.campus.smart_campus.repository.AppUserRepository;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.regex.Pattern;
+
+@Service
+public class AuthService {
+
+    public static final String SESSION_USER_ID = "SMART_CAMPUS_USER_ID";
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile(
+            "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$"
+    );
+
+    private final AppUserRepository appUserRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+
+    public AuthService(AppUserRepository appUserRepository, BCryptPasswordEncoder passwordEncoder) {
+        this.appUserRepository = appUserRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    public UserProfileResponse register(RegisterRequest request, HttpSession session) {
+        String email = request.email().trim().toLowerCase();
+        if (appUserRepository.existsByEmailIgnoreCase(email)) {
+            throw new BusinessException("An account already exists with this email.");
+        }
+
+        if (request.role() == UserRole.SUPER_ADMIN) {
+            throw new BusinessException("Super administrator accounts cannot be created through registration.");
+        }
+
+        validateFullName(request.fullName());
+        validatePasswordStrength(request.password());
+        AppUser user = new AppUser();
+        user.setFullName(request.fullName().trim());
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setRole(request.role());
+        user.setActive(true);
+
+        AppUser savedUser = appUserRepository.save(user);
+        session.setAttribute(SESSION_USER_ID, savedUser.getId());
+        return toProfile(savedUser);
+    }
+
+    public UserProfileResponse login(LoginRequest request, HttpSession session) {
+        AppUser user = appUserRepository.findByEmailIgnoreCase(request.email().trim())
+                .orElseThrow(() -> new UnauthorizedException("Invalid email or password."));
+
+        if (!user.isActive()) {
+            throw new UnauthorizedException("Your account is inactive. Please contact the administrator.");
+        }
+
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new UnauthorizedException("Invalid email or password.");
+        }
+
+        session.setAttribute(SESSION_USER_ID, user.getId());
+        return toProfile(user);
+    }
+
+    public UserProfileResponse getCurrentUser(HttpSession session) {
+        Object userId = session.getAttribute(SESSION_USER_ID);
+        if (userId == null) {
+            throw new UnauthorizedException("Please log in to continue.");
+        }
+
+        AppUser user = appUserRepository.findById((Long) userId)
+                .orElseThrow(() -> new NotFoundException("Authenticated user was not found."));
+
+        if (!user.isActive()) {
+            session.invalidate();
+            throw new UnauthorizedException("Your account is inactive.");
+        }
+
+        return toProfile(user);
+    }
+
+    public void logout(HttpSession session) {
+        session.invalidate();
+    }
+
+    public void deleteCurrentUser(HttpSession session) {
+        AppUser currentUser = getCurrentAppUser(session);
+        ensureAtLeastOneSuperAdminRemains(currentUser.getId(), currentUser.getRole());
+        appUserRepository.delete(currentUser);
+        session.invalidate();
+    }
+
+    public List<UserProfileResponse> listUsers(HttpSession session) {
+        requireSuperAdmin(session);
+        return appUserRepository.findAll().stream()
+                .map(this::toProfile)
+                .toList();
+    }
+
+    public void deleteUserById(Long id, HttpSession session) {
+        AppUser currentUser = getCurrentAppUser(session);
+        if (currentUser.getRole() != UserRole.SUPER_ADMIN) {
+            throw new UnauthorizedException("Only a super administrator can delete user accounts.");
+        }
+
+        AppUser targetUser = appUserRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("User account was not found."));
+
+        ensureAtLeastOneSuperAdminRemains(targetUser.getId(), targetUser.getRole());
+        appUserRepository.delete(targetUser);
+
+        if (currentUser.getId().equals(targetUser.getId())) {
+            session.invalidate();
+        }
+    }
+
+    public AppUser createSeedUser(String fullName, String email, String rawPassword, com.campus.smart_campus.model.UserRole role) {
+        return appUserRepository.findByEmailIgnoreCase(email)
+                .orElseGet(() -> {
+                    AppUser user = new AppUser();
+                    user.setFullName(fullName);
+                    user.setEmail(email.toLowerCase());
+                    user.setPasswordHash(passwordEncoder.encode(rawPassword));
+                    user.setRole(role);
+                    user.setActive(true);
+                    return appUserRepository.save(user);
+                });
+    }
+
+    private UserProfileResponse toProfile(AppUser user) {
+        return new UserProfileResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole());
+    }
+
+    private AppUser getCurrentAppUser(HttpSession session) {
+        Object userId = session.getAttribute(SESSION_USER_ID);
+        if (userId == null) {
+            throw new UnauthorizedException("Please log in to continue.");
+        }
+
+        AppUser user = appUserRepository.findById((Long) userId)
+                .orElseThrow(() -> new NotFoundException("Authenticated user was not found."));
+
+        if (!user.isActive()) {
+            session.invalidate();
+            throw new UnauthorizedException("Your account is inactive.");
+        }
+
+        return user;
+    }
+
+    private UserProfileResponse requireSuperAdmin(HttpSession session) {
+        AppUser currentUser = getCurrentAppUser(session);
+        if (currentUser.getRole() != UserRole.SUPER_ADMIN) {
+            throw new UnauthorizedException("Only a super administrator can access user management.");
+        }
+        return toProfile(currentUser);
+    }
+
+    private void ensureAtLeastOneSuperAdminRemains(Long targetUserId, UserRole targetRole) {
+        if (targetRole == UserRole.SUPER_ADMIN && appUserRepository.countByRole(UserRole.SUPER_ADMIN) <= 1) {
+            throw new BusinessException("At least one super administrator must remain in the system.");
+        }
+    }
+
+    private void validateFullName(String fullName) {
+        String normalized = fullName.trim();
+        if (normalized.length() < 3) {
+            throw new BusinessException("Full name must be at least 3 letters.");
+        }
+        if (!normalized.matches("^[A-Za-z ]+$")) {
+            throw new BusinessException("Full name can contain only letters and spaces.");
+        }
+        long letterCount = normalized.chars().filter(Character::isLetter).count();
+        if (letterCount < 3) {
+            throw new BusinessException("Full name must contain at least 3 letters.");
+        }
+    }
+
+    private void validatePasswordStrength(String password) {
+        if (!PASSWORD_PATTERN.matcher(password).matches()) {
+            throw new BusinessException("Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a symbol.");
+        }
+    }
+}
