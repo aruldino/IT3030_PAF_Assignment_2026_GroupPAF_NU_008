@@ -1,6 +1,6 @@
 // @ts-nocheck
 export default function AnnouncementsList({ announcements, currentUser, onEditAnnouncement, onDeleteAnnouncement }) {
-  const isAdmin = currentUser?.role === "ADMIN";
+  const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN";
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);

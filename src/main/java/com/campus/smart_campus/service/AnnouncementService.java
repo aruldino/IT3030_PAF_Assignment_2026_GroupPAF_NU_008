@@ -1,8 +1,8 @@
 package com.campus.smart_campus.service;
 
 import com.campus.smart_campus.dto.AnnouncementRequest;
-import com.campus.smart_campus.exception.ForbiddenException;
 import com.campus.smart_campus.exception.NotFoundException;
+import com.campus.smart_campus.exception.ForbiddenException;
 import com.campus.smart_campus.model.Announcement;
 import com.campus.smart_campus.model.UserRole;
 import com.campus.smart_campus.repository.AnnouncementRepository;
@@ -28,7 +28,7 @@ public class AnnouncementService {
 
     public Announcement createAnnouncement(AnnouncementRequest request, HttpSession session) {
         var currentUser = authService.getCurrentUser(session);
-        if (currentUser.role() != UserRole.ADMIN && currentUser.role() != UserRole.SUPER_ADMIN) {
+        if (!RoleAccess.canManageAnnouncements(currentUser.role())) {
             throw new ForbiddenException("Only administrators can post announcements.");
         }
 
@@ -42,7 +42,7 @@ public class AnnouncementService {
 
     public void deleteAnnouncement(Long id, HttpSession session) {
         var currentUser = authService.getCurrentUser(session);
-        if (currentUser.role() != UserRole.ADMIN && currentUser.role() != UserRole.SUPER_ADMIN) {
+        if (!RoleAccess.canManageAnnouncements(currentUser.role())) {
             throw new ForbiddenException("Only administrators can delete announcements.");
         }
 
@@ -53,7 +53,7 @@ public class AnnouncementService {
 
     public Announcement updateAnnouncement(Long id, AnnouncementRequest request, HttpSession session) {
         var currentUser = authService.getCurrentUser(session);
-        if (currentUser.role() != UserRole.ADMIN && currentUser.role() != UserRole.SUPER_ADMIN) {
+        if (!RoleAccess.canManageAnnouncements(currentUser.role())) {
             throw new ForbiddenException("Only administrators can edit announcements.");
         }
 

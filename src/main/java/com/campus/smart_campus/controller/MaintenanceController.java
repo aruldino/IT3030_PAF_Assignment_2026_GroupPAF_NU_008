@@ -37,46 +37,48 @@ public class MaintenanceController {
     }
 
     @GetMapping
-    public List<MaintenanceTicket> getTickets(@RequestParam(required = false) MaintenanceStatus status) {
-        return maintenanceService.getTickets(status);
+    public List<MaintenanceTicket> getTickets(@RequestParam(required = false) MaintenanceStatus status, jakarta.servlet.http.HttpSession session) {
+        return maintenanceService.getTickets(status, session);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public MaintenanceTicket createTicket(@Valid @RequestBody MaintenanceRequest request) {
-        return maintenanceService.createTicket(request);
+    public MaintenanceTicket createTicket(@Valid @RequestBody MaintenanceRequest request, jakarta.servlet.http.HttpSession session) {
+        return maintenanceService.createTicket(request, session);
     }
 
     @PutMapping("/{id}")
-    public MaintenanceTicket updateTicket(@PathVariable Long id, @Valid @RequestBody MaintenanceRequest request) {
-        return maintenanceService.updateTicket(id, request);
+    public MaintenanceTicket updateTicket(@PathVariable Long id, @Valid @RequestBody MaintenanceRequest request, jakarta.servlet.http.HttpSession session) {
+        return maintenanceService.updateTicket(id, request, session);
     }
 
     @PutMapping("/{id}/assign")
     public MaintenanceTicket assignTechnician(
             @PathVariable Long id,
-            @RequestParam String technician
+            @RequestParam String technician,
+            jakarta.servlet.http.HttpSession session
     ) {
-        return maintenanceService.assignTechnician(id, technician);
+        return maintenanceService.assignTechnician(id, technician, session);
     }
 
     @PutMapping("/{id}/status")
     public MaintenanceTicket updateTicketStatus(
             @PathVariable Long id,
             @RequestParam MaintenanceStatus status,
-            @RequestParam(required = false) String assignedTechnician
+            @RequestParam(required = false) String assignedTechnician,
+            jakarta.servlet.http.HttpSession session
     ) {
-        return maintenanceService.updateStatus(id, status, assignedTechnician);
+        return maintenanceService.updateStatus(id, status, assignedTechnician, session);
     }
 
     @PostMapping("/{id}/comments")
-    public List<MaintenanceCommentResponse> addComment(@PathVariable Long id, @Valid @RequestBody MaintenanceCommentRequest request) {
+    public List<MaintenanceCommentResponse> addComment(@PathVariable Long id, @Valid @RequestBody MaintenanceCommentRequest request, jakarta.servlet.http.HttpSession session) {
         return maintenanceService.addComment(id, request.author(), request.comment());
     }
 
     @PostMapping("/{id}/attachments")
-    public List<String> addAttachments(@PathVariable Long id, @Valid @RequestBody MaintenanceAttachmentRequest request) {
-        return maintenanceService.addAttachments(id, request.attachments());
+    public List<String> addAttachments(@PathVariable Long id, @Valid @RequestBody MaintenanceAttachmentRequest request, jakarta.servlet.http.HttpSession session) {
+        return maintenanceService.addAttachments(id, request.attachments(), session);
     }
 
     @GetMapping("/{id}/comments")
@@ -109,8 +111,8 @@ public class MaintenanceController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteTicket(@PathVariable Long id) {
-        maintenanceService.deleteTicket(id);
+    public ResponseEntity<Void> deleteTicket(@PathVariable Long id, jakarta.servlet.http.HttpSession session) {
+        maintenanceService.deleteTicket(id, session);
         return ResponseEntity.noContent().build();
     }
 }

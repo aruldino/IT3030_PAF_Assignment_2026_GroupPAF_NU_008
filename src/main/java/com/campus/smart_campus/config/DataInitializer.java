@@ -42,6 +42,8 @@ public class DataInitializer {
             widenUserRoleColumn(jdbcTemplate);
             authService.createSeedUser("Campus Super Administrator", "superadmin@smartcampus.lk", "SuperAdmin@123", UserRole.SUPER_ADMIN);
             authService.createSeedUser("Campus Administrator", "admin@smartcampus.lk", "Admin@123", UserRole.ADMIN);
+            authService.createSeedUser("Campus Student", "student@smartcampus.lk", "Student@123", UserRole.STUDENT);
+            authService.createSeedUser("Campus Staff", "staff@smartcampus.lk", "Staff@123", UserRole.STAFF);
             authService.createSeedUser("Campus User", "user@smartcampus.lk", "User@123", UserRole.USER);
             authService.createSeedUser("Campus Technician", "tech@smartcampus.lk", "Tech@123", UserRole.TECHNICIAN);
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import campusHero from "./assets/campus-hero.svg";
+import campusHero from "./assets/1683089064803.png";
 import { StatCard } from "./shared/components/StatCard";
 import Header from "./components/Header";
 import AnnouncementsList from "./components/AnnouncementsList";
@@ -22,7 +22,79 @@ const departments = [
 ];
 const academicYears = ["Year 1", "Year 2", "Year 3", "Year 4"];
 const semesters = ["Semester 1", "Semester 2"];
-const navItems = ["home", "summary", "dashboard", "resources", "bookings", "maintenance"];
+const navItems = ["home", "summary", "dashboard", "resources", "bookings", "maintenance", "users"];
+const roleAliases: Record<string, string> = {
+  USER: "STUDENT",
+};
+
+const roleHierarchy = ["SUPER_ADMIN", "ADMIN", "STAFF", "TECHNICIAN", "STUDENT"] as const;
+
+const roleLabels: Record<string, string> = {
+  STUDENT: "Student",
+  STAFF: "Staff",
+  USER: "Student",
+  TECHNICIAN: "Technician",
+  ADMIN: "Admin",
+  SUPER_ADMIN: "Super Admin",
+};
+
+const rolePermissions = {
+  student: {
+    nav: ["home", "resources", "bookings", "maintenance"],
+    canViewDashboard: false,
+    canManageResources: false,
+    canBook: true,
+    canManageBookings: false,
+    canReportTickets: true,
+    canManageTickets: false,
+    canManageAnnouncements: false,
+    canManageUsers: false,
+  },
+  staff: {
+    nav: ["home", "summary", "dashboard", "resources", "bookings", "maintenance"],
+    canViewDashboard: true,
+    canManageResources: false,
+    canBook: true,
+    canManageBookings: false,
+    canReportTickets: true,
+    canManageTickets: false,
+    canManageAnnouncements: false,
+    canManageUsers: false,
+  },
+  technician: {
+    nav: ["home", "summary", "dashboard", "maintenance"],
+    canViewDashboard: true,
+    canManageResources: false,
+    canBook: false,
+    canManageBookings: false,
+    canReportTickets: false,
+    canManageTickets: true,
+    canManageAnnouncements: false,
+    canManageUsers: false,
+  },
+  admin: {
+    nav: ["home", "summary", "dashboard", "resources", "bookings", "maintenance"],
+    canViewDashboard: true,
+    canManageResources: true,
+    canBook: true,
+    canManageBookings: true,
+    canReportTickets: true,
+    canManageTickets: true,
+    canManageAnnouncements: true,
+    canManageUsers: false,
+  },
+  superAdmin: {
+    nav: ["home", "summary", "dashboard", "resources", "bookings", "maintenance", "users"],
+    canViewDashboard: true,
+    canManageResources: true,
+    canBook: true,
+    canManageBookings: true,
+    canReportTickets: true,
+    canManageTickets: true,
+    canManageAnnouncements: true,
+    canManageUsers: true,
+  },
+} as const;
 
 function isValidPage(value: string | null | undefined): value is string {
   return Boolean(value && navItems.includes(value));
@@ -188,7 +260,7 @@ const emptyResource: ResourceForm = { name: "", type: "LECTURE_HALL", capacity: 
 const emptyBooking: BookingForm = { resourceId: "", requestedBy: "", department: "", academicYear: "", semester: "", bookingDate: "", startTime: "", endTime: "", purpose: "", expectedAttendees: "" };
 const emptyTicket: TicketForm = { resourceId: "", issueType: "", description: "", reportedBy: "", priority: "MEDIUM" };
 const emptyLogin: LoginForm = { email: "", password: "" };
-const emptyRegister: RegisterForm = { fullName: "", email: "", password: "", confirmPassword: "", role: "USER" };
+const emptyRegister: RegisterForm = { fullName: "", email: "", password: "", confirmPassword: "", role: "STUDENT" };
 const emptyAnnouncement: AnnouncementForm = { title: "", content: "" };
 
 function sanitizePdfText(value: string) {
@@ -345,6 +417,7 @@ export default function PortalApp() {
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsPopupOpen, setNotificationsPopupOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
   const [notificationPreferenceForm, setNotificationPreferenceForm] = useState<NotificationPreferences>({
     resourceAlerts: true,
@@ -610,6 +683,7 @@ export default function PortalApp() {
 
   useEffect(() => {
     setAuthErrors({ login: {}, register: {} });
+    setAlert(null);
   }, [authTab]);
 
   function formatError(data: unknown) {
@@ -861,7 +935,7 @@ function isStrongPassword(value: string) {
 
   async function saveAnnouncement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (currentUser?.role !== "ADMIN") {
+    if (currentUser?.role !== "ADMIN" && currentUser?.role !== "SUPER_ADMIN") {
       setAlert({ type: "error", message: "Only administrators can post announcements." });
       return;
     }
@@ -886,7 +960,7 @@ function isStrongPassword(value: string) {
   if (booting) return <div className="startup-screen">Preparing Smart Campus portal...</div>;
   if (!currentUser) return <AuthView {...{ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }} />;
 
-  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, alertHistory, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources }} />;
+  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, alertHistory, notifications, notificationsPopupOpen, setNotificationsPopupOpen, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources }} />;
 }
 
 function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }: {
@@ -905,13 +979,13 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
 }) {
   return (
     <div className="auth-shell">
-      <section className="auth-hero"><div><span className="eyebrow">Smart Campus Portal</span><h1>Proper login system, home page, menu bar, and dashboard.</h1><p>This portal now has protected login, validation checks, and a more complete website experience.</p><div className="demo-card"><strong>Demo accounts</strong><p>admin@smartcampus.lk / Admin@123</p><p>user@smartcampus.lk / User@123</p><p>tech@smartcampus.lk / Tech@123</p></div></div><img src={campusHero} alt="Campus visual" /></section>
+      <section className="auth-hero"><div><span className="eyebrow">Smart Campus Portal</span><h1>Proper login system, home page, menu bar, and dashboard.</h1><p>This portal now has protected login, validation checks, and a more complete website experience.</p><div className="demo-card"><strong>Demo accounts</strong><p>superadmin@smartcampus.lk / SuperAdmin@123</p><p>admin@smartcampus.lk / Admin@123</p><p>student@smartcampus.lk / Student@123</p><p>staff@smartcampus.lk / Staff@123</p><p>tech@smartcampus.lk / Tech@123</p><small className="field-hint">Hierarchy: {roleHierarchy.join(" > ")}</small></div></div><img src={campusHero} alt="Campus visual" /></section>
       <section className="auth-panel">
         <div className="tab-row"><button className={authTab === "login" ? "tab active" : "tab"} onClick={() => setAuthTab("login")}>Login</button><button className={authTab === "register" ? "tab active" : "tab"} onClick={() => setAuthTab("register")}>Register</button></div>
         {alert && (
           <div className={`alert auth-alert ${alert.type}`} role="alert" aria-live="assertive">
             <span className="auth-alert-icon">{alert.type === "error" ? "!" : "i"}</span>
-            <span>{alert.message || "Please fix the highlighted fields."}</span>
+            <span>{alert.message || (authTab === "login" ? "Login failed. Check email and password." : "Please fix the highlighted fields.")}</span>
           </div>
         )}
         {authTab === "login" ? (
@@ -921,6 +995,7 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
               value={loginForm.email}
               onChange={(e) => {
                 setLoginForm({ ...loginForm, email: e.target.value });
+                if (alert?.type === "error") setAlert(null);
                 if (authErrors.login.email) setAuthErrors((current) => ({ ...current, login: { ...current.login, email: "" } }));
               }}
               placeholder="Email"
@@ -932,6 +1007,7 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
               value={loginForm.password}
               onChange={(e) => {
                 setLoginForm({ ...loginForm, password: e.target.value });
+                if (alert?.type === "error") setAlert(null);
                 if (authErrors.login.password) setAuthErrors((current) => ({ ...current, login: { ...current.login, password: "" } }));
               }}
               placeholder="Password"
@@ -972,7 +1048,8 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
               }}
               aria-invalid={Boolean(authErrors.register.role)}
             >
-              <option value="USER">User</option>
+              <option value="STUDENT">Student</option>
+              <option value="STAFF">Staff</option>
               <option value="TECHNICIAN">Technician</option>
               <option value="ADMIN">Admin</option>
             </select>
@@ -1035,11 +1112,11 @@ function DashboardView(props: {
   resourceStatuses: string[];
   bookingStatuses: string[];
   maintenancePriorities: string[];
-  maintenanceStatuses: string[];
-  pretty: (value: string) => string;
-  handleLogout: () => void;
-  handleDeleteMyAccount: () => void;
-  handleDeleteUserAccount: (id: number) => void;
+    maintenanceStatuses: string[];
+    pretty: (value: string) => string;
+    handleLogout: () => void;
+    handleDeleteMyAccount: () => void;
+    handleDeleteUserAccount: (id: number) => void;
   campusHero: string;
   editingResourceId: number | null;
   setEditingResourceId: (value: number | null) => void;
@@ -1058,11 +1135,13 @@ function DashboardView(props: {
   announcementTitleInputRef: RefObject<HTMLInputElement>;
   announcementContentInputRef: RefObject<HTMLTextAreaElement>;
   announcements: Announcement[];
-  alertHistory: AlertHistoryItem[];
-  notifications: Notification[];
-  notificationPreferences: NotificationPreferences | null;
-  notificationPreferenceForm: NotificationPreferences;
-  setNotificationPreferenceForm: (value: NotificationPreferences) => void;
+    alertHistory: AlertHistoryItem[];
+    notifications: Notification[];
+    notificationsPopupOpen: boolean;
+    setNotificationsPopupOpen: (value: boolean) => void;
+    notificationPreferences: NotificationPreferences | null;
+    notificationPreferenceForm: NotificationPreferences;
+    setNotificationPreferenceForm: (value: NotificationPreferences) => void;
   resourceSearch: string;
   setResourceSearch: (value: string) => void;
   resourceTypeFilter: string;
@@ -1090,9 +1169,33 @@ function DashboardView(props: {
   startTicketEdit: (ticket: MaintenanceTicket) => void;
   cancelTicketEdit: () => void;
 }) {
-  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, alertHistory, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
-    const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
-    const isAdmin = currentUser.role === "ADMIN" || isSuperAdmin;
+  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, alertHistory, notifications, notificationsPopupOpen, setNotificationsPopupOpen, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
+    const currentRole = roleAliases[currentUser.role] ?? currentUser.role;
+    const isSuperAdmin = currentRole === "SUPER_ADMIN";
+    const isAdmin = currentRole === "ADMIN" || isSuperAdmin;
+    const isTechnician = currentRole === "TECHNICIAN";
+    const isStaff = currentRole === "STAFF";
+    const isStudent = currentRole === "STUDENT";
+    const visibleNavItems = navItems.filter((item) =>
+      (isSuperAdmin
+        ? rolePermissions.superAdmin.nav
+        : isAdmin
+          ? rolePermissions.admin.nav
+          : isTechnician
+            ? rolePermissions.technician.nav
+            : isStaff
+              ? rolePermissions.staff.nav
+              : rolePermissions.student.nav
+      ).includes(item)
+    );
+    const pageToRender = visibleNavItems.includes(activePage) ? activePage : "home";
+    const canManageResources = isAdmin || isSuperAdmin;
+    const canBookResources = isStudent || isStaff || isAdmin || isSuperAdmin;
+    const canManageBookings = isAdmin || isSuperAdmin;
+    const canReportTickets = isStudent || isStaff || isAdmin || isSuperAdmin;
+    const canManageTickets = isTechnician || isAdmin || isSuperAdmin;
+    const canManageAnnouncements = isAdmin || isSuperAdmin;
+    const canManageUsers = isAdmin || isSuperAdmin;
     const activeResources = resources.filter((resource) => resource.status === "ACTIVE");
     const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
     const smartSearchPresets = [
@@ -1331,30 +1434,81 @@ function DashboardView(props: {
   };
 
   const handleAlertsClick = () => {
-    setActivePage("dashboard");
-    // Scroll to alerts section after state update
-    window.setTimeout(() => {
-      const alertsElement = document.querySelector('[data-section="alerts"]');
-      if (alertsElement) {
-        alertsElement.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 100);
+    setNotificationsPopupOpen(true);
   };
 
   return (
     <div className="site-container">
       <Header currentUser={currentUser} onLogout={handleLogout} onDeleteAccount={handleDeleteMyAccount} notificationCount={notifications.filter((notification) => !notification.read).length} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} onAlertsClick={handleAlertsClick} />
+      {notificationsPopupOpen && (
+        <div className="notification-modal-overlay" onClick={() => setNotificationsPopupOpen(false)}>
+          <div
+            className="notification-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Notifications"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="row between">
+              <div>
+                <h3>Notifications</h3>
+                <p>Latest campus alerts, approvals, and ticket updates</p>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setNotificationsPopupOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="notification-list notification-list-modal">
+              {notifications.map((notification) => (
+                <article key={notification.id} className={`notification-item ${notification.read ? "read" : "unread"}`}>
+                  <div className="row between">
+                    <span className="chip">{pretty(notification.category)}</span>
+                    <span className="muted">{new Date(notification.createdAt).toLocaleString()}</span>
+                  </div>
+                  <h4>{notification.title}</h4>
+                  <p>{notification.message}</p>
+                  <div className="row between">
+                    <span className={notification.read ? "muted" : "pill info"}>{notification.read ? "Read" : "New"}</span>
+                    {!notification.read && (
+                      <button type="button" className="secondary-button" onClick={() => markNotificationRead(notification.id)}>
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ))}
+              {notifications.length === 0 && <p>No notifications available.</p>}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="site-shell">
         {alert && <div className={`alert toast-banner ${alert.type}`} role="status" aria-live="polite">{alert.message}</div>}
       <div className="portal-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
         <aside className={`sidebar ${sidebarOpen ? 'active' : ''}`}>
-          <div className="demo-card"><strong>Campus Modules</strong><p>Home, Dashboard, Resources, Bookings, and Maintenance are available in one workspace.</p></div>
-          <nav className="nav-stack">{navItems.map((item) => <button key={item} className={activePage === item ? "nav-link active" : "nav-link"} onClick={() => setActivePage(item)}>{pretty(item)}</button>)}</nav>
+          <div className="demo-card"><strong>Campus Modules</strong><p>{isStudent ? "Students can view resources and make bookings. Staff, technicians, and admins see only the tools they need." : "Role-based tools are shown according to your access level."}</p></div>
+          <nav className="nav-stack">{visibleNavItems.map((item) => <button key={item} className={activePage === item ? "nav-link active" : "nav-link"} onClick={() => setActivePage(item)}>{pretty(item)}</button>)}</nav>
         </aside>
         <main className="main-content">
-          {activePage === "home" && <section className="hero-card"><div><span className="eyebrow light">Smart Campus Operations Hub</span><h1>Centralize campus resources, bookings, maintenance, and user access in one dashboard.</h1><p>Track operations clearly, switch between modules quickly, and present a professional system that matches your assignment flow.</p><div className="row"><button className="primary-button" onClick={() => setActivePage("dashboard")}>Open Dashboard</button><button className="secondary-button" onClick={() => setActivePage("resources")}>Manage Resources</button></div></div><img src={campusHero} alt="Campus illustration" /></section>}
-          {activePage === "summary" && (
+          {pageToRender !== "home" &&
+            pageToRender !== "summary" &&
+            pageToRender !== "dashboard" &&
+            pageToRender !== "resources" &&
+            pageToRender !== "bookings" &&
+            pageToRender !== "maintenance" && (
+              <section className="panel">
+                <h3>Page Unavailable</h3>
+                <p>This page is not available for your current role. Use the sidebar to continue.</p>
+                <div className="row">
+                  <button type="button" className="primary-button" onClick={() => setActivePage("home")}>
+                    Go Home
+                  </button>
+                </div>
+              </section>
+            )}
+          {pageToRender === "home" && <section className="hero-card"><div><span className="eyebrow light">Smart Campus Operations Hub</span><h1>Centralize campus resources, bookings, maintenance, and user access in one dashboard.</h1><p>Track operations clearly, switch between modules quickly, and present a professional system that matches your assignment flow.</p><div className="row">{canManageResources || canManageBookings || canManageTickets ? <button className="primary-button" onClick={() => setActivePage("dashboard")}>Open Dashboard</button> : <button className="primary-button" onClick={() => setActivePage("bookings")}>Start Booking</button>}{canManageResources ? <button className="secondary-button" onClick={() => setActivePage("resources")}>Manage Resources</button> : <button className="secondary-button" onClick={() => setActivePage("resources")}>Browse Resources</button>}</div></div><img src={campusHero} alt="Campus illustration" /></section>}
+          {pageToRender === "summary" && (
             <>
               <section className="two-column">
                 <article className="panel">
@@ -1493,7 +1647,7 @@ function DashboardView(props: {
               </section>
             </>
           )}
-          {activePage === "dashboard" && (
+          {pageToRender === "dashboard" && (
             <>
               <div className="dashboard-banner">
                 <h1>Dashboard</h1>
@@ -1528,10 +1682,10 @@ function DashboardView(props: {
                     Delete My Account
                   </button>
                 </article>
-                {isSuperAdmin ? (
+                {canManageUsers ? (
                   <article className="panel">
                     <h3>User Management</h3>
-                    <p>Super administrators can delete any account in the system.</p>
+                    <p>{isSuperAdmin ? "Super administrators can view every account and delete any account, including their own, as long as one super admin remains." : "Administrators can view all users and manage roles, but cannot modify super administrator accounts."}</p>
                     <div className="table-list">
                       {users.map((user) => (
                         <div key={user.id} className="table-card">
@@ -1541,13 +1695,15 @@ function DashboardView(props: {
                             <p>{pretty(user.role)}</p>
                           </div>
                           <div className="table-actions">
-                            <button
-                              type="button"
-                              className="danger-button"
-                              onClick={() => handleDeleteUserAccount(user.id)}
-                            >
-                              Delete
-                            </button>
+                            {(isSuperAdmin || user.role !== "SUPER_ADMIN") && (
+                              <button
+                                type="button"
+                                className="danger-button"
+                                onClick={() => handleDeleteUserAccount(user.id)}
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1561,8 +1717,8 @@ function DashboardView(props: {
                   </article>
                 )}
               </section>
-              {isAdmin && (
-                <section className="two-column">
+              {canManageAnnouncements && (
+                <section className="two-column" data-section="notifications">
                   <article ref={announcementFormRef} className="panel">
                     <h3>{editingAnnouncementId ? "Edit Announcement" : "Post Announcement"}</h3>
                     <p>Publish an official update for staff and students.</p>
@@ -1668,11 +1824,11 @@ function DashboardView(props: {
               <AnnouncementsList announcements={announcements} currentUser={currentUser} onEditAnnouncement={startAnnouncementEdit} onDeleteAnnouncement={removeAnnouncement} />
             </>
           )}
-            {activePage === "resources" && <><section className="two-column"><article ref={resourceFormRef} className="panel"><h3>{editingResourceId ? "Edit Resource" : "Add Resource"}</h3><form className="form-grid" onSubmit={saveResource}><input ref={resourceNameInputRef} value={resourceForm.name} onChange={(e) => setResourceForm({ ...resourceForm, name: e.target.value })} placeholder="Resource name" required /><select value={resourceForm.type} onChange={(e) => setResourceForm({ ...resourceForm, type: e.target.value })}>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input type="number" min="1" value={resourceForm.capacity} onChange={(e) => setResourceForm({ ...resourceForm, capacity: e.target.value })} placeholder="Capacity" required /><input value={resourceForm.location} onChange={(e) => setResourceForm({ ...resourceForm, location: e.target.value })} placeholder="Location" required /><input value={resourceForm.availabilityWindow} onChange={(e) => setResourceForm({ ...resourceForm, availabilityWindow: e.target.value })} placeholder="Availability window" required /><select value={resourceForm.status} onChange={(e) => setResourceForm({ ...resourceForm, status: e.target.value })}>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><textarea rows="4" value={resourceForm.description} onChange={(e) => setResourceForm({ ...resourceForm, description: e.target.value })} placeholder="Description" required /><div className="row"><button className="primary-button wide">{editingResourceId ? "Save" : "Add"}</button>{editingResourceId && <button type="button" className="secondary-button" onClick={() => { setEditingResourceId(null); setResourceForm(emptyResource); }}>Cancel</button>}</div></form></article><article className="panel"><h3>Resources</h3><p>Manage lecture halls, labs, meeting rooms, and equipment with structured forms and quick updates.</p></article></section><section className="two-column"><article className="panel"><div className="panel-header"><div><h3>Smart Search</h3><p>Search by name, type, location, description, or availability. Results rank by best match first.</p></div><span className="badge">{resources.length} found</span></div><div className="search-chip-row">{smartSearchPresets.map((preset) => <button key={preset.label} type="button" className="chip subtle" onClick={() => applySmartSearchPreset(preset)}>{preset.label}</button>)}</div><div className="form-grid"><input value={resourceSearch} onChange={(e) => setResourceSearch(e.target.value)} placeholder="Try: lab, hall, projector, block, 100+" list="resource-suggestions" /><datalist id="resource-suggestions">{resourceSuggestions.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</datalist>{resourceSuggestions.length > 0 && <div className="search-suggestions">{resourceSuggestions.slice(0, 5).map((item, index) => <button key={item.id} type="button" className={`suggestion-card ${index === 0 ? "best" : ""}`} onClick={() => applyResourceSuggestion(item)}><strong>{item.name}</strong><span>{pretty(item.type)} • {item.location}</span><small>{item.capacity} seats • {pretty(item.status)}</small></button>)}</div>}<select value={resourceTypeFilter} onChange={(e) => setResourceTypeFilter(e.target.value)}><option value="">All types</option>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input value={resourceLocationFilter} onChange={(e) => setResourceLocationFilter(e.target.value)} placeholder="Location filter" /><input type="number" min="1" value={resourceCapacityFilter} onChange={(e) => setResourceCapacityFilter(e.target.value)} placeholder="Minimum capacity" /><select value={resourceStatusFilter} onChange={(e) => setResourceStatusFilter(e.target.value)}><option value="">All status</option>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><div className="row"><button type="button" className="secondary-button" onClick={() => { setResourceSearch(""); setResourceTypeFilter(""); setResourceLocationFilter(""); setResourceCapacityFilter(""); setResourceStatusFilter(""); setResourceSuggestions([]); }}>Clear filters</button></div></div></article><article className="panel"><h3>Bulk Import & Analytics</h3><p>Upload a CSV with columns: name,type,capacity,location,availabilityWindow,status,description.</p><div className="form-grid"><input type="file" accept=".csv,text/csv" onChange={(e) => setResourceCsvFile(e.target.files?.[0] ?? null)} /><button type="button" className="primary-button" onClick={importResources}>Import CSV</button></div><div className="mini-metrics" style={{ marginTop: "16px" }}>{resourceAnalytics.slice(0, 4).map((item) => <div key={item.resourceId}><strong>{item.bookingCount}</strong><span>{item.resourceName}</span></div>)}{resourceAnalytics.length === 0 && <div><strong>0</strong><span>No bookings yet</span></div>}</div></article></section><section className="card-grid">{resources.map((resource, index) => <article key={resource.id} className={`resource-card ${index === 0 && resourceSearch.trim() ? "best-match" : ""}`}><div className="row between"><span className={`pill ${resource.status === "ACTIVE" ? "ok" : "warn"}`}>{pretty(resource.status)}</span><span className="muted">{pretty(resource.type)}</span></div><h3>{resource.name}</h3><p>{resource.description}</p><p><strong>Location:</strong> {resource.location}</p><p><strong>Capacity:</strong> {resource.capacity}</p><p><strong>Availability:</strong> {resource.availabilityWindow}</p><div className="row"><button className="secondary-button" onClick={() => { setActivePage("resources"); setEditingResourceId(resource.id); setResourceForm({ name: resource.name, type: resource.type, capacity: String(resource.capacity), location: resource.location, availabilityWindow: resource.availabilityWindow, status: resource.status, description: resource.description }); }}>Edit</button><button className="danger-button" onClick={() => removeResource(resource.id)}>Delete</button></div></article>)}</section></>}
-          {activePage === "bookings" && <section className="two-column"><article className="panel"><h3>Booking Form</h3><form className="form-grid" onSubmit={saveBooking}><select value={bookingForm.resourceId} onChange={(e) => setBookingForm({ ...bookingForm, resourceId: e.target.value })} required><option value="">Select resource</option>{activeResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}</select><input value={bookingForm.requestedBy} onChange={(e) => setBookingForm({ ...bookingForm, requestedBy: e.target.value })} placeholder="Requested by" required /><select value={bookingForm.department} onChange={(e) => setBookingForm({ ...bookingForm, department: e.target.value })} required><option value="">Select department</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select><select value={bookingForm.academicYear} onChange={(e) => setBookingForm({ ...bookingForm, academicYear: e.target.value })} required><option value="">Select year</option>{academicYears.map((year) => <option key={year} value={year}>{year}</option>)}</select><select value={bookingForm.semester} onChange={(e) => setBookingForm({ ...bookingForm, semester: e.target.value })} required><option value="">Select semester</option>{semesters.map((semester) => <option key={semester} value={semester}>{semester}</option>)}</select><input type="date" value={bookingForm.bookingDate} onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })} required /><div className="row"><input type="time" value={bookingForm.startTime} onChange={(e) => setBookingForm({ ...bookingForm, startTime: e.target.value })} required /><input type="time" value={bookingForm.endTime} onChange={(e) => setBookingForm({ ...bookingForm, endTime: e.target.value })} required /></div><input type="number" min="1" value={bookingForm.expectedAttendees} onChange={(e) => setBookingForm({ ...bookingForm, expectedAttendees: e.target.value })} placeholder="Expected attendees" required /><textarea rows="4" value={bookingForm.purpose} onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })} placeholder="Purpose" required /><button className="primary-button wide">Submit Booking</button></form></article><article className="panel"><div className="row between"><h3>Booking Queue</h3><select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}><option value="">All</option>{bookingStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select></div><div className="table-list">{bookings.map((booking) => <div key={booking.id} className="table-card"><div><strong>{booking.resource.name}</strong><p>{booking.requestedBy} from {booking.department}</p><p>{booking.academicYear ? `${booking.academicYear} | ${booking.semester ?? ""}` : "Academic year not specified"}</p><p>{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p><p>{booking.purpose}</p></div><div className="table-actions"><span className={`pill ${booking.status === "APPROVED" ? "ok" : booking.status === "REJECTED" ? "muted-pill" : "info"}`}>{pretty(booking.status)}</span>{booking.status === "PENDING" && <><button className="primary-button" onClick={() => updateBooking(booking.id, "APPROVED")}>Approve</button><button className="danger-button" onClick={() => updateBooking(booking.id, "REJECTED")}>Reject</button></>}</div></div>)}</div></article></section>}
-          {activePage === "maintenance" && (
+          {pageToRender === "resources" && <><section className="two-column"><article ref={resourceFormRef} className="panel" hidden={!canManageResources}><h3>{editingResourceId ? "Edit Resource" : "Add Resource"}</h3><form className="form-grid" onSubmit={saveResource}><input ref={resourceNameInputRef} value={resourceForm.name} onChange={(e) => setResourceForm({ ...resourceForm, name: e.target.value })} placeholder="Resource name" required /><select value={resourceForm.type} onChange={(e) => setResourceForm({ ...resourceForm, type: e.target.value })}>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input type="number" min="1" value={resourceForm.capacity} onChange={(e) => setResourceForm({ ...resourceForm, capacity: e.target.value })} placeholder="Capacity" required /><input value={resourceForm.location} onChange={(e) => setResourceForm({ ...resourceForm, location: e.target.value })} placeholder="Location" required /><input value={resourceForm.availabilityWindow} onChange={(e) => setResourceForm({ ...resourceForm, availabilityWindow: e.target.value })} placeholder="Availability window" required /><select value={resourceForm.status} onChange={(e) => setResourceForm({ ...resourceForm, status: e.target.value })}>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><textarea rows="4" value={resourceForm.description} onChange={(e) => setResourceForm({ ...resourceForm, description: e.target.value })} placeholder="Description" required /><div className="row"><button className="primary-button wide">{editingResourceId ? "Save" : "Add"}</button>{editingResourceId && <button type="button" className="secondary-button" onClick={() => { setEditingResourceId(null); setResourceForm(emptyResource); }}>Cancel</button>}</div></form></article><article className="panel"><h3>Resources</h3><p>Manage lecture halls, labs, meeting rooms, and equipment with structured forms and quick updates.</p></article></section><section className="two-column"><article className="panel"><div className="panel-header"><div><h3>Smart Search</h3><p>Search by name, type, location, description, or availability. Results rank by best match first.</p></div><span className="badge">{resources.length} found</span></div><div className="search-chip-row">{smartSearchPresets.map((preset) => <button key={preset.label} type="button" className="chip subtle" onClick={() => applySmartSearchPreset(preset)}>{preset.label}</button>)}</div><div className="form-grid"><input value={resourceSearch} onChange={(e) => setResourceSearch(e.target.value)} placeholder="Try: lab, hall, projector, block, 100+" list="resource-suggestions" /><datalist id="resource-suggestions">{resourceSuggestions.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</datalist>{resourceSuggestions.length > 0 && <div className="search-suggestions">{resourceSuggestions.slice(0, 5).map((item, index) => <button key={item.id} type="button" className={`suggestion-card ${index === 0 ? "best" : ""}`} onClick={() => applyResourceSuggestion(item)}><strong>{item.name}</strong><span>{pretty(item.type)} • {item.location}</span><small>{item.capacity} seats • {pretty(item.status)}</small></button>)}</div>}<select value={resourceTypeFilter} onChange={(e) => setResourceTypeFilter(e.target.value)}><option value="">All types</option>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input value={resourceLocationFilter} onChange={(e) => setResourceLocationFilter(e.target.value)} placeholder="Location filter" /><input type="number" min="1" value={resourceCapacityFilter} onChange={(e) => setResourceCapacityFilter(e.target.value)} placeholder="Minimum capacity" /><select value={resourceStatusFilter} onChange={(e) => setResourceStatusFilter(e.target.value)}><option value="">All status</option>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><div className="row"><button type="button" className="secondary-button" onClick={() => { setResourceSearch(""); setResourceTypeFilter(""); setResourceLocationFilter(""); setResourceCapacityFilter(""); setResourceStatusFilter(""); setResourceSuggestions([]); }}>Clear filters</button></div></div></article><article className="panel" hidden={!canManageResources}><h3>Bulk Import & Analytics</h3><p>Upload a CSV with columns: name,type,capacity,location,availabilityWindow,status,description.</p><div className="form-grid"><input type="file" accept=".csv,text/csv" onChange={(e) => setResourceCsvFile(e.target.files?.[0] ?? null)} /><button type="button" className="primary-button" onClick={importResources}>Import CSV</button></div><div className="mini-metrics" style={{ marginTop: "16px" }}>{resourceAnalytics.slice(0, 4).map((item) => <div key={item.resourceId}><strong>{item.bookingCount}</strong><span>{item.resourceName}</span></div>)}{resourceAnalytics.length === 0 && <div><strong>0</strong><span>No bookings yet</span></div>}</div></article></section><section className="card-grid">{resources.map((resource, index) => <article key={resource.id} className={`resource-card ${index === 0 && resourceSearch.trim() ? "best-match" : ""}`}><div className="row between"><span className={`pill ${resource.status === "ACTIVE" ? "ok" : "warn"}`}>{pretty(resource.status)}</span><span className="muted">{pretty(resource.type)}</span></div><h3>{resource.name}</h3><p>{resource.description}</p><p><strong>Location:</strong> {resource.location}</p><p><strong>Capacity:</strong> {resource.capacity}</p><p><strong>Availability:</strong> {resource.availabilityWindow}</p><div className="row">{canManageResources && <button className="secondary-button" onClick={() => { setActivePage("resources"); setEditingResourceId(resource.id); setResourceForm({ name: resource.name, type: resource.type, capacity: String(resource.capacity), location: resource.location, availabilityWindow: resource.availabilityWindow, status: resource.status, description: resource.description }); }}>Edit</button>}{canManageResources && <button className="danger-button" onClick={() => removeResource(resource.id)}>Delete</button>}</div></article>)}</section></>}
+          {pageToRender === "bookings" && <section className="two-column"><article className="panel" hidden={!canBookResources}><h3>Booking Form</h3><form className="form-grid" onSubmit={saveBooking}><select value={bookingForm.resourceId} onChange={(e) => setBookingForm({ ...bookingForm, resourceId: e.target.value })} required><option value="">Select resource</option>{activeResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}</select><input value={bookingForm.requestedBy} onChange={(e) => setBookingForm({ ...bookingForm, requestedBy: e.target.value })} placeholder="Requested by" required /><select value={bookingForm.department} onChange={(e) => setBookingForm({ ...bookingForm, department: e.target.value })} required><option value="">Select department</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select><select value={bookingForm.academicYear} onChange={(e) => setBookingForm({ ...bookingForm, academicYear: e.target.value })} required><option value="">Select year</option>{academicYears.map((year) => <option key={year} value={year}>{year}</option>)}</select><select value={bookingForm.semester} onChange={(e) => setBookingForm({ ...bookingForm, semester: e.target.value })} required><option value="">Select semester</option>{semesters.map((semester) => <option key={semester} value={semester}>{semester}</option>)}</select><input type="date" value={bookingForm.bookingDate} onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })} required /><div className="row"><input type="time" value={bookingForm.startTime} onChange={(e) => setBookingForm({ ...bookingForm, startTime: e.target.value })} required /><input type="time" value={bookingForm.endTime} onChange={(e) => setBookingForm({ ...bookingForm, endTime: e.target.value })} required /></div><input type="number" min="1" value={bookingForm.expectedAttendees} onChange={(e) => setBookingForm({ ...bookingForm, expectedAttendees: e.target.value })} placeholder="Expected attendees" required /><textarea rows="4" value={bookingForm.purpose} onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })} placeholder="Purpose" required /><button className="primary-button wide">Submit Booking</button></form></article><article className="panel"><div className="row between"><h3>Booking Queue</h3><select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}><option value="">All</option>{bookingStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select></div><div className="table-list">{bookings.map((booking) => <div key={booking.id} className="table-card"><div><strong>{booking.resource.name}</strong><p>{booking.requestedBy} from {booking.department}</p><p>{booking.academicYear ? `${booking.academicYear} | ${booking.semester ?? ""}` : "Academic year not specified"}</p><p>{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p><p>{booking.purpose}</p></div><div className="table-actions"><span className={`pill ${booking.status === "APPROVED" ? "ok" : booking.status === "REJECTED" ? "muted-pill" : "info"}`}>{pretty(booking.status)}</span>{canManageBookings && booking.status === "PENDING" && <><button className="primary-button" onClick={() => updateBooking(booking.id, "APPROVED")}>Approve</button><button className="danger-button" onClick={() => updateBooking(booking.id, "REJECTED")}>Reject</button></>}</div></div>)}</div></article></section>}
+          {pageToRender === "maintenance" && (canReportTickets || canManageTickets ? (
             <section className="two-column">
-              <article ref={maintenanceFormRef} className="panel">
+              <article ref={maintenanceFormRef} className="panel" hidden={!canReportTickets}>
                 <h3>{editingTicketId ? "Edit Maintenance Ticket" : "Maintenance Form"}</h3>
                 <form className="form-grid" onSubmit={saveTicket}>
                   <select
@@ -1765,17 +1921,17 @@ function DashboardView(props: {
                         >
                           {pretty(ticket.status)}
                         </span>
-                        {ticket.status === "OPEN" && (
+                        {canManageTickets && ticket.status === "OPEN" && (
                           <button className="secondary-button" onClick={() => updateTicket(ticket.id, "IN_PROGRESS")}>
                             Start Work
                           </button>
                         )}
-                        {ticket.status !== "RESOLVED" && (
+                        {canManageTickets && ticket.status !== "RESOLVED" && (
                           <button className="primary-button" onClick={() => updateTicket(ticket.id, "RESOLVED")}>
                             Resolve
                           </button>
                         )}
-                        {isAdmin && (
+                        {canManageTickets && (
                           <>
                             <button type="button" className="secondary-button" onClick={() => startTicketEdit(ticket)}>
                               Edit
@@ -1790,6 +1946,49 @@ function DashboardView(props: {
                   ))}
                 </div>
               </article>
+            </section>
+          ) : (
+            <section className="two-column">
+              <article className="panel">
+                <h3>Maintenance Access Restricted</h3>
+                <p>Your role can view resources and bookings, but maintenance workflows are not enabled.</p>
+                <div className="row">
+                  <button type="button" className="primary-button" onClick={() => setActivePage("resources")}>Go to Resources</button>
+                  <button type="button" className="secondary-button" onClick={() => setActivePage("bookings")}>Go to Bookings</button>
+                </div>
+              </article>
+            </section>
+          ))}
+          {pageToRender === "users" && isSuperAdmin && (
+            <section className="panel">
+              <div className="row between">
+                <div>
+                  <h3>All User Accounts</h3>
+                  <p>Super administrators can view every account in the system and delete any account when required.</p>
+                </div>
+                <span className="badge">{users.length} users</span>
+              </div>
+              <div className="table-list">
+                {users.map((user) => (
+                  <div key={user.id} className="table-card">
+                    <div>
+                      <strong>{user.fullName}</strong>
+                      <p>{user.email}</p>
+                      <p>{pretty(user.role)}</p>
+                    </div>
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() => handleDeleteUserAccount(user.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {users.length === 0 && <p>No user accounts found.</p>}
+              </div>
             </section>
           )}
           {loading && <div className="loading-bar">Loading workspace data...</div>}

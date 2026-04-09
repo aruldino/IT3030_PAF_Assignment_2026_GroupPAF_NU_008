@@ -19,6 +19,16 @@ interface HeaderProps {
 
 export default function Header({ currentUser, onLogout, onDeleteAccount, notificationCount = 0, sidebarOpen = false, setSidebarOpen, onAlertsClick }: HeaderProps) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const displayRole =
+    currentUser?.role === "USER" || currentUser?.role === "STUDENT"
+      ? "Student"
+      : currentUser?.role === "STAFF"
+        ? "Staff"
+        : currentUser?.role === "TECHNICIAN"
+          ? "Technician"
+          : currentUser?.role === "SUPER_ADMIN"
+            ? "Super Admin"
+            : currentUser?.role ?? "";
 
   return (
     <header className="app-header">
@@ -40,10 +50,10 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
         <div className="header-brand">
           <div className="logo">
             <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="50" cy="50" r="48" fill="none" stroke="#0066cc" strokeWidth="6" />
-              <rect x="28" y="30" width="10" height="40" fill="#0066cc" rx="2" />
-              <rect x="45" y="20" width="10" height="50" fill="#0066cc" rx="2" />
-              <rect x="62" y="35" width="10" height="35" fill="#0066cc" rx="2" />
+              <circle cx="50" cy="50" r="48" fill="none" stroke="#6b7280" strokeWidth="6" />
+              <rect x="28" y="30" width="10" height="40" fill="#4b5563" rx="2" />
+              <rect x="45" y="20" width="10" height="50" fill="#6b7280" rx="2" />
+              <rect x="62" y="35" width="10" height="35" fill="#9ca3af" rx="2" />
             </svg>
           </div>
           <div className="brand-text">
@@ -60,7 +70,7 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
               className="badge badge-light notification-badge" 
               aria-label={`${notificationCount} unread notifications`}
               onClick={onAlertsClick}
-              style={{ cursor: 'pointer', border: 'none', background: 'inherit', padding: 'var(--spacing-xs)', borderRadius: '4px' }}
+              style={{ cursor: 'pointer', padding: 'var(--spacing-xs)', borderRadius: '4px' }}
             >
               🔔 {notificationCount} alerts
             </button>
@@ -70,7 +80,7 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
               </div>
               <div className="user-info">
                 <div className="user-name">{currentUser.fullName}</div>
-                <div className="user-role">{currentUser.role}</div>
+                <div className="user-role">{displayRole}</div>
               </div>
               <svg className={`dropdown-icon ${showDropdown ? 'active' : ''}`} viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />

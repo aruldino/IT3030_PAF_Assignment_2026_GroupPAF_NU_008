@@ -32,13 +32,13 @@ public class BookingController {
     }
 
     @GetMapping
-    public List<Booking> getBookings(@RequestParam(required = false) BookingStatus status) {
-        return bookingService.getBookings(status);
+    public List<Booking> getBookings(@RequestParam(required = false) BookingStatus status, HttpSession session) {
+        return bookingService.getBookings(status, session);
     }
 
     @GetMapping("/history")
-    public List<Booking> getHistory() {
-        return bookingService.getBookingHistory();
+    public List<Booking> getHistory(HttpSession session) {
+        return bookingService.getBookingHistory(session);
     }
 
     @GetMapping("/my")
@@ -58,32 +58,32 @@ public class BookingController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Booking createBooking(@Valid @RequestBody BookingRequest request) {
-        return bookingService.createBooking(request);
+    public Booking createBooking(@Valid @RequestBody BookingRequest request, HttpSession session) {
+        return bookingService.createBooking(request, session);
     }
 
     @PutMapping("/{id}/approve")
-    public Booking approveBooking(@PathVariable Long id) {
-        return bookingService.approveBooking(id);
+    public Booking approveBooking(@PathVariable Long id, HttpSession session) {
+        return bookingService.approveBooking(id, session);
     }
 
     @PutMapping("/{id}/reject")
-    public Booking rejectBooking(@PathVariable Long id) {
-        return bookingService.rejectBooking(id);
+    public Booking rejectBooking(@PathVariable Long id, HttpSession session) {
+        return bookingService.rejectBooking(id, session);
     }
 
     @PutMapping("/{id}/cancel")
-    public Booking cancelBooking(@PathVariable Long id) {
-        return bookingService.cancelBooking(id);
+    public Booking cancelBooking(@PathVariable Long id, HttpSession session) {
+        return bookingService.cancelBooking(id, session);
     }
 
     @PutMapping("/expire-pending")
-    public List<Booking> expirePendingBookings() {
-        return bookingService.expirePendingBookings();
+    public List<Booking> expirePendingBookings(HttpSession session) {
+        return bookingService.expirePendingBookings(session);
     }
 
     @PatchMapping("/{id}/status")
-    public Booking updateStatus(@PathVariable Long id, @RequestParam BookingStatus status) {
-        return bookingService.updateBookingStatus(id, status);
+    public Booking updateStatus(@PathVariable Long id, @RequestParam BookingStatus status, HttpSession session) {
+        return bookingService.updateBookingStatus(id, status, session);
     }
 }

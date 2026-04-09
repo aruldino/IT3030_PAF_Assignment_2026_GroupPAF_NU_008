@@ -6,6 +6,7 @@ import com.campus.smart_campus.dto.MaintenanceRequest;
 import com.campus.smart_campus.dto.MaintenanceSlaResponse;
 import com.campus.smart_campus.exception.BusinessException;
 import com.campus.smart_campus.exception.NotFoundException;
+import com.campus.smart_campus.exception.UnauthorizedException;
 import com.campus.smart_campus.model.AppUser;
 import com.campus.smart_campus.model.MaintenancePriority;
 import com.campus.smart_campus.model.MaintenanceStatus;
@@ -55,7 +56,35 @@ public class MaintenanceService {
                 .toList();
     }
 
-    public MaintenanceTicket createTicket(MaintenanceRequest request) {
+    public List<MaintenanceTicket> getTickets(MaintenanceStatus status, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        UserRole role = RoleAccess.normalize(currentUser.getRole());
+
+        if (role == UserRole.ADMIN || role == UserRole.SUPER_ADMIN) {
+            return getTickets(status);
+        }
+
+        if (role == UserRole.TECHNICIAN) {
+            return maintenanceTicketRepository.findAll().stream()
+                    .filter(ticket -> isAssignedToCurrentUser(ticket, currentUser))
+                    .filter(ticket -> status == null || ticket.getStatus() == status)
+                    .sorted(Comparator.comparing(MaintenanceTicket::getCreatedAt).reversed())
+                    .toList();
+        }
+
+        return maintenanceTicketRepository.findAll().stream()
+                .filter(ticket -> isReportedByCurrentUser(ticket, currentUser))
+                .filter(ticket -> status == null || ticket.getStatus() == status)
+                .sorted(Comparator.comparing(MaintenanceTicket::getCreatedAt).reversed())
+                .toList();
+    }
+
+    public MaintenanceTicket createTicket(MaintenanceRequest request, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canCreateTickets(currentUser.getRole())) {
+            throw new BusinessException("This role cannot create maintenance tickets.");
+        }
+
         MaintenanceTicket ticket = new MaintenanceTicket();
         ticket.setResource(resourceService.getResourceById(request.resourceId()));
         ticket.setIssueType(request.issueType().trim());
@@ -68,9 +97,18 @@ public class MaintenanceService {
         return maintenanceTicketRepository.save(ticket);
     }
 
-    public MaintenanceTicket updateStatus(@NonNull Long id, @NonNull MaintenanceStatus status, String assignedTechnician) {
+    public MaintenanceTicket updateStatus(@NonNull Long id, @NonNull MaintenanceStatus status, String assignedTechnician, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
         MaintenanceTicket ticket = maintenanceTicketRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Maintenance ticket not found with id: " + id));
+
+        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.TECHNICIAN && !isAssignedToCurrentUser(ticket, currentUser)) {
+            throw new UnauthorizedException("Technicians can only update assigned tickets.");
+        }
+
+        if (!RoleAccess.canManageTickets(currentUser.getRole()) && RoleAccess.normalize(currentUser.getRole()) != UserRole.TECHNICIAN) {
+            throw new UnauthorizedException("You do not have permission to update this ticket.");
+        }
 
         ticket.setStatus(status);
         ticket.setAssignedTechnician(assignedTechnician == null ? null : assignedTechnician.trim());
@@ -81,7 +119,12 @@ public class MaintenanceService {
         return maintenanceTicketRepository.save(ticket);
     }
 
-    public MaintenanceTicket assignTechnician(@NonNull Long id, @NonNull String technician) {
+    public MaintenanceTicket assignTechnician(@NonNull Long id, @NonNull String technician, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.TECHNICIAN || RoleAccess.normalize(currentUser.getRole()) == UserRole.STUDENT) {
+            throw new UnauthorizedException("Only administrators can assign technicians.");
+        }
+
         MaintenanceTicket ticket = maintenanceTicketRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Maintenance ticket not found with id: " + id));
 
@@ -93,8 +136,8 @@ public class MaintenanceService {
         return maintenanceTicketRepository.save(ticket);
     }
 
-    public MaintenanceTicket changeStatus(@NonNull Long id, @NonNull MaintenanceStatus status) {
-        return updateStatus(id, status, null);
+    public MaintenanceTicket changeStatus(@NonNull Long id, @NonNull MaintenanceStatus status, HttpSession session) {
+        return updateStatus(id, status, null, session);
     }
 
     public List<MaintenanceCommentResponse> addComment(@NonNull Long id, @NonNull String author, @NonNull String comment) {
@@ -173,7 +216,12 @@ public class MaintenanceService {
         return comments;
     }
 
-    public List<String> addAttachments(@NonNull Long id, @NonNull List<String> attachments) {
+    public List<String> addAttachments(@NonNull Long id, @NonNull List<String> attachments, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canCreateTickets(currentUser.getRole()) && !RoleAccess.canManageTickets(currentUser.getRole())) {
+            throw new UnauthorizedException("You do not have permission to add attachments.");
+        }
+
         ensureTicketExists(id);
         List<String> current = ticketAttachments.computeIfAbsent(id, key -> new java.util.ArrayList<>());
         if (current.size() + attachments.size() > 3) {
@@ -203,7 +251,12 @@ public class MaintenanceService {
         );
     }
 
-    public MaintenanceTicket updateTicket(@NonNull Long id, MaintenanceRequest request) {
+    public MaintenanceTicket updateTicket(@NonNull Long id, MaintenanceRequest request, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canManageResources(currentUser.getRole()) && !RoleAccess.canManageTickets(currentUser.getRole())) {
+            throw new UnauthorizedException("You do not have permission to update this ticket.");
+        }
+
         MaintenanceTicket ticket = maintenanceTicketRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Maintenance ticket not found with id: " + id));
 
@@ -217,7 +270,12 @@ public class MaintenanceService {
         return maintenanceTicketRepository.save(ticket);
     }
 
-    public void deleteTicket(@NonNull Long id) {
+    public void deleteTicket(@NonNull Long id, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canManageResources(currentUser.getRole())) {
+            throw new UnauthorizedException("Only administrators can delete maintenance tickets.");
+        }
+
         MaintenanceTicket ticket = maintenanceTicketRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Maintenance ticket not found with id: " + id));
         maintenanceTicketRepository.delete(ticket);
@@ -245,8 +303,26 @@ public class MaintenanceService {
         String author = comment.author().trim().toLowerCase();
         boolean ownsComment = author.equals(currentFullName) || author.equals(currentEmail);
         boolean withinWindow = comment.createdAt().isAfter(LocalDateTime.now().minusMinutes(30));
-        boolean privileged = currentUser.getRole() == UserRole.SUPER_ADMIN || currentUser.getRole() == UserRole.ADMIN;
+        boolean privileged = RoleAccess.canManageResources(currentUser.getRole());
         return privileged || (ownsComment && withinWindow);
+    }
+
+    private boolean isAssignedToCurrentUser(MaintenanceTicket ticket, AppUser currentUser) {
+        if (ticket.getAssignedTechnician() == null || ticket.getAssignedTechnician().isBlank()) {
+            return false;
+        }
+
+        String assigned = ticket.getAssignedTechnician().trim().toLowerCase();
+        String fullName = currentUser.getFullName().trim().toLowerCase();
+        String email = currentUser.getEmail().trim().toLowerCase();
+        return assigned.equals(fullName) || assigned.equals(email);
+    }
+
+    private boolean isReportedByCurrentUser(MaintenanceTicket ticket, AppUser currentUser) {
+        String reportedBy = ticket.getReportedBy().trim().toLowerCase();
+        String fullName = currentUser.getFullName().trim().toLowerCase();
+        String email = currentUser.getEmail().trim().toLowerCase();
+        return reportedBy.equals(fullName) || reportedBy.equals(email);
     }
 
     private MaintenancePriority resolvePriority(String issueType, String description, MaintenancePriority requestedPriority) {

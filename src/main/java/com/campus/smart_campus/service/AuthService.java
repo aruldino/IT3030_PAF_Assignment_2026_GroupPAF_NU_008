@@ -101,28 +101,42 @@ public class AuthService {
     }
 
     public List<UserProfileResponse> listUsers(HttpSession session) {
-        requireSuperAdmin(session);
+        requireViewUsers(session);
         return appUserRepository.findAll().stream()
                 .map(this::toProfile)
                 .toList();
     }
 
     public UserProfileResponse updateUserRole(Long userId, UserRole role, HttpSession session) {
-        requireSuperAdmin(session);
+        AppUser currentUser = requireManageRoles(session);
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User account was not found."));
+
+        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.ADMIN && user.getRole() == UserRole.SUPER_ADMIN) {
+            throw new UnauthorizedException("Administrators cannot modify super administrator accounts.");
+        }
+
+        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.ADMIN && RoleAccess.normalize(role) == UserRole.SUPER_ADMIN) {
+            throw new UnauthorizedException("Administrators cannot promote accounts to super administrator.");
+        }
+
         user.setRole(role);
         return toProfile(appUserRepository.save(user));
     }
 
     public void deleteUserById(Long id, HttpSession session) {
         AppUser currentUser = getCurrentAppUser(session);
-        if (currentUser.getRole() != UserRole.SUPER_ADMIN) {
-            throw new UnauthorizedException("Only a super administrator can delete user accounts.");
-        }
-
         AppUser targetUser = appUserRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User account was not found."));
+
+        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.ADMIN
+                && RoleAccess.normalize(targetUser.getRole()) == UserRole.SUPER_ADMIN) {
+            throw new UnauthorizedException("Administrators cannot delete super administrator accounts.");
+        }
+
+        if (!RoleAccess.canDeleteAnyAccount(currentUser.getRole()) && RoleAccess.normalize(currentUser.getRole()) != UserRole.ADMIN) {
+            throw new UnauthorizedException("You do not have permission to delete user accounts.");
+        }
 
         ensureAtLeastOneSuperAdminRemains(targetUser.getId(), targetUser.getRole());
         appUserRepository.delete(targetUser);
@@ -134,6 +148,14 @@ public class AuthService {
 
     public AppUser createSeedUser(String fullName, String email, String rawPassword, com.campus.smart_campus.model.UserRole role) {
         return appUserRepository.findByEmailIgnoreCase(email)
+                .map(existing -> {
+                    existing.setFullName(fullName);
+                    existing.setEmail(email.toLowerCase());
+                    existing.setPasswordHash(passwordEncoder.encode(rawPassword));
+                    existing.setRole(role);
+                    existing.setActive(true);
+                    return appUserRepository.save(existing);
+                })
                 .orElseGet(() -> {
                     AppUser user = new AppUser();
                     user.setFullName(fullName);
@@ -168,10 +190,25 @@ public class AuthService {
 
     private UserProfileResponse requireSuperAdmin(HttpSession session) {
         AppUser currentUser = getCurrentAppUser(session);
-        if (currentUser.getRole() != UserRole.SUPER_ADMIN) {
+        if (RoleAccess.normalize(currentUser.getRole()) != UserRole.SUPER_ADMIN) {
             throw new UnauthorizedException("Only a super administrator can access user management.");
         }
         return toProfile(currentUser);
+    }
+
+    private AppUser requireManageRoles(HttpSession session) {
+        AppUser currentUser = getCurrentAppUser(session);
+        if (!RoleAccess.canManageRoles(currentUser.getRole())) {
+            throw new UnauthorizedException("Only administrators can manage roles.");
+        }
+        return currentUser;
+    }
+
+    private void requireViewUsers(HttpSession session) {
+        AppUser currentUser = getCurrentAppUser(session);
+        if (!RoleAccess.canViewUsers(currentUser.getRole())) {
+            throw new UnauthorizedException("Only administrators can view user data.");
+        }
     }
 
     private void ensureAtLeastOneSuperAdminRemains(Long targetUserId, UserRole targetRole) {

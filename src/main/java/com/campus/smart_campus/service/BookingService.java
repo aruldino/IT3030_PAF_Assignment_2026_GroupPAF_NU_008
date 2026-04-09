@@ -49,7 +49,36 @@ public class BookingService {
                 .toList();
     }
 
-    public Booking createBooking(BookingRequest request) {
+    public List<Booking> getBookings(BookingStatus status, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (RoleAccess.canManageBookings(currentUser.getRole()) || RoleAccess.normalize(currentUser.getRole()) == com.campus.smart_campus.model.UserRole.STAFF) {
+            return getBookings(status);
+        }
+
+        if (RoleAccess.canCreateBookings(currentUser.getRole())) {
+            return getMyBookings(session).stream()
+                    .filter(booking -> status == null || booking.getStatus() == status)
+                    .toList();
+        }
+
+        throw new UnauthorizedException("Technicians cannot access booking listings.");
+    }
+
+    public List<Booking> getBookingHistory(HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (RoleAccess.canManageBookings(currentUser.getRole()) || RoleAccess.normalize(currentUser.getRole()) == com.campus.smart_campus.model.UserRole.STAFF) {
+            return getBookingHistory();
+        }
+
+        return getMyBookings(session);
+    }
+
+    public Booking createBooking(BookingRequest request, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canCreateBookings(currentUser.getRole())) {
+            throw new UnauthorizedException("This role cannot create bookings.");
+        }
+
         validateTimeRange(request);
 
         Resource resource = resourceService.getResourceById(request.resourceId());
@@ -78,7 +107,12 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    public Booking updateBookingStatus(@NonNull Long id, @NonNull BookingStatus status) {
+    public Booking updateBookingStatus(@NonNull Long id, @NonNull BookingStatus status, HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canManageBookings(currentUser.getRole())) {
+            throw new UnauthorizedException("Only administrators can change booking status.");
+        }
+
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Booking not found with id: " + id));
 
@@ -88,16 +122,16 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    public Booking approveBooking(@NonNull Long id) {
-        return updateBookingStatus(id, BookingStatus.APPROVED);
+    public Booking approveBooking(@NonNull Long id, HttpSession session) {
+        return updateBookingStatus(id, BookingStatus.APPROVED, session);
     }
 
-    public Booking rejectBooking(@NonNull Long id) {
-        return updateBookingStatus(id, BookingStatus.REJECTED);
+    public Booking rejectBooking(@NonNull Long id, HttpSession session) {
+        return updateBookingStatus(id, BookingStatus.REJECTED, session);
     }
 
-    public Booking cancelBooking(@NonNull Long id) {
-        return updateBookingStatus(id, BookingStatus.CANCELLED);
+    public Booking cancelBooking(@NonNull Long id, HttpSession session) {
+        return updateBookingStatus(id, BookingStatus.CANCELLED, session);
     }
 
     public List<Booking> getMyBookings(HttpSession session) {
@@ -115,6 +149,23 @@ public class BookingService {
 
     public List<Booking> getConflicts(Long resourceId, java.time.LocalDate bookingDate, java.time.LocalTime startTime, java.time.LocalTime endTime) {
         return bookingRepository.findConflicts(resourceId, bookingDate, startTime, endTime);
+    }
+
+    public List<Booking> expirePendingBookings(HttpSession session) {
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canManageBookings(currentUser.getRole())) {
+            throw new UnauthorizedException("Only administrators can expire pending bookings.");
+        }
+
+        LocalDateTime cutoff = LocalDateTime.now().minus(24, ChronoUnit.HOURS);
+        List<Booking> expired = new ArrayList<>();
+
+        bookingRepository.findPendingCreatedBefore(cutoff).forEach(booking -> {
+            booking.setStatus(BookingStatus.CANCELLED);
+            expired.add(bookingRepository.save(booking));
+        });
+
+        return expired;
     }
 
     public List<Booking> expirePendingBookings() {

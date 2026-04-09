@@ -3,10 +3,15 @@ package com.campus.smart_campus.controller;
 import com.campus.smart_campus.dto.ResourceRequest;
 import com.campus.smart_campus.dto.ResourceAvailabilityResponse;
 import com.campus.smart_campus.dto.ResourceUsageResponse;
+import com.campus.smart_campus.exception.UnauthorizedException;
 import com.campus.smart_campus.model.Resource;
 import com.campus.smart_campus.model.ResourceStatus;
 import com.campus.smart_campus.model.ResourceType;
+import com.campus.smart_campus.model.UserRole;
+import com.campus.smart_campus.service.AuthService;
+import com.campus.smart_campus.service.RoleAccess;
 import com.campus.smart_campus.service.ResourceService;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,9 +29,11 @@ public class ResourceController {
 
     private static final Logger logger = LoggerFactory.getLogger(ResourceController.class);
     private final ResourceService resourceService;
+    private final AuthService authService;
 
-    public ResourceController(ResourceService resourceService) {
+    public ResourceController(ResourceService resourceService, AuthService authService) {
         this.resourceService = resourceService;
+        this.authService = authService;
     }
 
     @GetMapping
@@ -67,28 +74,39 @@ public class ResourceController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Resource createResource(@Valid @RequestBody ResourceRequest resource) {
+    public Resource createResource(@Valid @RequestBody ResourceRequest resource, HttpSession session) {
+        requireAdmin(session);
         logger.info("POST /api/resources - Creating resource: {}", resource.name());
         return resourceService.saveResource(resource);
     }
 
     @PostMapping(value = "/import/csv", consumes = {MediaType.TEXT_PLAIN_VALUE, "text/csv"})
-    public List<Resource> importCsv(@RequestBody String csvContent) {
+    public List<Resource> importCsv(@RequestBody String csvContent, HttpSession session) {
+        requireAdmin(session);
         logger.info("POST /api/resources/import/csv - Importing CSV resources");
         return resourceService.importResourcesFromCsv(csvContent);
     }
 
     @PutMapping("/{id}")
-    public Resource updateResource(@PathVariable Long id, @Valid @RequestBody ResourceRequest resource) {
+    public Resource updateResource(@PathVariable Long id, @Valid @RequestBody ResourceRequest resource, HttpSession session) {
+        requireAdmin(session);
         logger.info("PUT /api/resources/{} - Updating resource", id);
         return resourceService.updateResource(id, resource);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> deleteResource(@PathVariable Long id) {
+    public ResponseEntity<Map<String, String>> deleteResource(@PathVariable Long id, HttpSession session) {
+        requireAdmin(session);
         logger.info("DELETE /api/resources/{} - Deleting resource", id);
         resourceService.deleteResource(id);
         logger.info("DELETE /api/resources/{} - Resource deleted successfully", id);
         return ResponseEntity.ok(Map.of("message", "Resource deleted successfully"));
+    }
+
+    private void requireAdmin(HttpSession session) {
+        UserRole role = authService.getCurrentUser(session).role();
+        if (!RoleAccess.canManageResources(role)) {
+            throw new UnauthorizedException("Only administrators can manage resources.");
+        }
     }
 }
