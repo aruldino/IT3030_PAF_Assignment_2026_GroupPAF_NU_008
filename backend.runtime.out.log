@@ -20615,3 +20615,23 @@ Hibernate:
 2026-04-09T18:33:27.045+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-2] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json]
 2026-04-09T18:33:27.045+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-2] m.m.a.RequestResponseBodyMethodProcessor : Writing [[NotificationResponse[id=1, title=Resource Update, message=Main Auditorium is available for booking. (truncated)...]
 2026-04-09T18:33:27.046+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-04-09T18:33:42.045+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-7] o.s.web.servlet.DispatcherServlet        : GET "/api/notifications", parameters={}
+2026-04-09T18:33:42.046+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-7] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.campus.smart_campus.controller.NotificationController#getNotifications()
+2026-04-09T18:33:42.046+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-7] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json]
+2026-04-09T18:33:42.046+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-7] m.m.a.RequestResponseBodyMethodProcessor : Writing [[NotificationResponse[id=1, title=Resource Update, message=Main Auditorium is available for booking. (truncated)...]
+2026-04-09T18:33:42.047+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-7] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-04-09T18:33:57.050+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-8] o.s.web.servlet.DispatcherServlet        : GET "/api/notifications", parameters={}
+2026-04-09T18:33:57.051+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-8] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.campus.smart_campus.controller.NotificationController#getNotifications()
+2026-04-09T18:33:57.052+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-8] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json]
+2026-04-09T18:33:57.052+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-8] m.m.a.RequestResponseBodyMethodProcessor : Writing [[NotificationResponse[id=1, title=Resource Update, message=Main Auditorium is available for booking. (truncated)...]
+2026-04-09T18:33:57.053+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-8] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-04-09T18:34:12.044+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-3] o.s.web.servlet.DispatcherServlet        : GET "/api/notifications", parameters={}
+2026-04-09T18:34:12.044+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-3] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.campus.smart_campus.controller.NotificationController#getNotifications()
+2026-04-09T18:34:12.045+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-3] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json]
+2026-04-09T18:34:12.045+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-3] m.m.a.RequestResponseBodyMethodProcessor : Writing [[NotificationResponse[id=1, title=Resource Update, message=Main Auditorium is available for booking. (truncated)...]
+2026-04-09T18:34:12.046+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-3] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-04-09T18:34:55.053+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : GET "/api/notifications", parameters={}
+2026-04-09T18:34:55.054+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-1] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.campus.smart_campus.controller.NotificationController#getNotifications()
+2026-04-09T18:34:55.054+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-1] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json]
+2026-04-09T18:34:55.054+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-1] m.m.a.RequestResponseBodyMethodProcessor : Writing [[NotificationResponse[id=1, title=Resource Update, message=Main Auditorium is available for booking. (truncated)...]
+2026-04-09T18:34:55.055+05:30 DEBUG 18260 --- [smart-campus] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
