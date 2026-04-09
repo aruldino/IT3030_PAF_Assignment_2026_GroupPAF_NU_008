@@ -40,6 +40,7 @@ public class DataInitializer {
     ) {
         return args -> {
             widenUserRoleColumn(jdbcTemplate);
+            widenResourceStatusColumn(jdbcTemplate);
             authService.createSeedUser("Campus Super Administrator", "superadmin@smartcampus.lk", "SuperAdmin@123", UserRole.SUPER_ADMIN);
             authService.createSeedUser("Campus Administrator", "admin@smartcampus.lk", "Admin@123", UserRole.ADMIN);
             authService.createSeedUser("Campus Student", "student@smartcampus.lk", "Student@123", UserRole.STUDENT);
@@ -243,6 +244,14 @@ public class DataInitializer {
     private void widenUserRoleColumn(JdbcTemplate jdbcTemplate) {
         try {
             jdbcTemplate.execute("ALTER TABLE app_users ALTER COLUMN role SET DATA TYPE VARCHAR(30)");
+        } catch (Exception ignored) {
+            // If the table is new or already widened, keep booting normally.
+        }
+    }
+
+    private void widenResourceStatusColumn(JdbcTemplate jdbcTemplate) {
+        try {
+            jdbcTemplate.execute("ALTER TABLE resources ALTER COLUMN status SET DATA TYPE VARCHAR(40)");
         } catch (Exception ignored) {
             // If the table is new or already widened, keep booting normally.
         }

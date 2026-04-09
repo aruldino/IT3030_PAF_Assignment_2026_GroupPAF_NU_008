@@ -1197,6 +1197,12 @@ function DashboardView(props: {
     const canManageAnnouncements = isAdmin || isSuperAdmin;
     const canManageUsers = isAdmin || isSuperAdmin;
     const activeResources = resources.filter((resource) => resource.status === "ACTIVE");
+    const totalResourcesCount = summary?.totalResources ?? resources.length;
+    const activeResourcesCount = summary?.activeResources ?? activeResources.length;
+    const pendingBookingsCount = summary?.pendingBookings ?? bookings.filter((item) => item.status === "PENDING").length;
+    const approvedBookingsCount = summary?.approvedBookings ?? bookings.filter((item) => item.status === "APPROVED").length;
+    const openTicketsCount = summary?.openMaintenanceTickets ?? tickets.filter((item) => item.status === "OPEN").length;
+    const resolvedTicketsCount = summary?.resolvedMaintenanceTickets ?? tickets.filter((item) => item.status === "RESOLVED").length;
     const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
     const smartSearchPresets = [
       { label: "Labs", query: "lab", type: "LAB" },
@@ -1496,7 +1502,8 @@ function DashboardView(props: {
             pageToRender !== "dashboard" &&
             pageToRender !== "resources" &&
             pageToRender !== "bookings" &&
-            pageToRender !== "maintenance" && (
+            pageToRender !== "maintenance" &&
+            pageToRender !== "users" && (
               <section className="panel">
                 <h3>Page Unavailable</h3>
                 <p>This page is not available for your current role. Use the sidebar to continue.</p>
@@ -1654,12 +1661,12 @@ function DashboardView(props: {
                 <p>Campus operations overview and live status at a glance</p>
               </div>
               <section className="summary-grid">
-                <StatCard label="Total Resources" value={summary?.totalResources ?? 0} />
-                <StatCard label="Active Resources" value={summary?.activeResources ?? 0} />
-                <StatCard label="Pending Bookings" value={summary?.pendingBookings ?? 0} />
-                <StatCard label="Approved Bookings" value={summary?.approvedBookings ?? 0} />
-                <StatCard label="Open Tickets" value={summary?.openMaintenanceTickets ?? 0} />
-                <StatCard label="Resolved Tickets" value={summary?.resolvedMaintenanceTickets ?? 0} />
+                <StatCard label="Total Resources" value={totalResourcesCount} />
+                <StatCard label="Active Resources" value={activeResourcesCount} />
+                <StatCard label="Pending Bookings" value={pendingBookingsCount} />
+                <StatCard label="Approved Bookings" value={approvedBookingsCount} />
+                <StatCard label="Open Tickets" value={openTicketsCount} />
+                <StatCard label="Resolved Tickets" value={resolvedTicketsCount} />
               </section>
               <section className="two-column">
                 <article className="panel">
