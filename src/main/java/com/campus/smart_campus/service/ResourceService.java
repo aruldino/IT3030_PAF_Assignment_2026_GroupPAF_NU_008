@@ -2,6 +2,8 @@ package com.campus.smart_campus.service;
 
 import com.campus.smart_campus.dto.ResourceRequest;
 import com.campus.smart_campus.exception.NotFoundException;
+import com.campus.smart_campus.dto.BookingSlotResponse;
+import com.campus.smart_campus.dto.ResourceAvailabilityResponse;
 import com.campus.smart_campus.model.Resource;
 import com.campus.smart_campus.model.ResourceStatus;
 import com.campus.smart_campus.model.ResourceType;
@@ -74,6 +76,28 @@ public class ResourceService {
         Resource resource = new Resource();
         apply(resource, request);
         return resourceRepository.save(resource);
+    }
+
+    public ResourceAvailabilityResponse getAvailability(@NonNull Long id) {
+        Resource resource = getResourceById(id);
+        List<BookingSlotResponse> bookedSlots = bookingRepository.findByResource_IdOrderByBookingDateAscStartTimeAsc(id)
+                .stream()
+                .map(booking -> new BookingSlotResponse(
+                        booking.getId(),
+                        booking.getBookingDate(),
+                        booking.getStartTime(),
+                        booking.getEndTime(),
+                        booking.getStatus().name()
+                ))
+                .toList();
+
+        return new ResourceAvailabilityResponse(
+                resource.getId(),
+                resource.getName(),
+                resource.getAvailabilityWindow(),
+                resource.getStatus(),
+                bookedSlots
+        );
     }
 
     public Resource updateResource(@NonNull Long id, @NonNull ResourceRequest request) {

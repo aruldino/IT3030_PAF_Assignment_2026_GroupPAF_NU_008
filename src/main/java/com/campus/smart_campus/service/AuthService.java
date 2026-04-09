@@ -107,6 +107,14 @@ public class AuthService {
                 .toList();
     }
 
+    public UserProfileResponse updateUserRole(Long userId, UserRole role, HttpSession session) {
+        requireSuperAdmin(session);
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User account was not found."));
+        user.setRole(role);
+        return toProfile(appUserRepository.save(user));
+    }
+
     public void deleteUserById(Long id, HttpSession session) {
         AppUser currentUser = getCurrentAppUser(session);
         if (currentUser.getRole() != UserRole.SUPER_ADMIN) {

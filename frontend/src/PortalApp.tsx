@@ -7,10 +7,10 @@ import "./portal.css";
 
 const API_BASE = "/api";
 const resourceTypes = ["LECTURE_HALL", "LAB", "MEETING_ROOM", "EQUIPMENT"];
-const resourceStatuses = ["ACTIVE", "OUT_OF_SERVICE"];
-const bookingStatuses = ["PENDING", "APPROVED", "REJECTED"];
+const resourceStatuses = ["ACTIVE", "OUT_OF_SERVICE", "MAINTENANCE"];
+const bookingStatuses = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"];
 const maintenancePriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
-const maintenanceStatuses = ["OPEN", "IN_PROGRESS", "RESOLVED"];
+const maintenanceStatuses = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 const departments = [
   "Faculty of Computing",
   "Faculty of Engineering",
@@ -56,6 +56,22 @@ type Announcement = {
   content: string;
   author: string;
   createdAt: string;
+};
+
+type Notification = {
+  id: number;
+  title: string;
+  message: string;
+  category: string;
+  read: boolean;
+  createdAt: string;
+};
+
+type NotificationPreferences = {
+  resourceAlerts: boolean;
+  bookingAlerts: boolean;
+  maintenanceAlerts: boolean;
+  announcementAlerts: boolean;
 };
 
 type AlertState = { type: "success" | "error"; message: string } | null;
@@ -173,6 +189,14 @@ export default function PortalApp() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
+  const [notificationPreferenceForm, setNotificationPreferenceForm] = useState<NotificationPreferences>({
+    resourceAlerts: true,
+    bookingAlerts: true,
+    maintenanceAlerts: true,
+    announcementAlerts: true,
+  });
   const [resourceForm, setResourceForm] = useState<ResourceForm>(emptyResource);
   const [bookingForm, setBookingForm] = useState<BookingForm>(emptyBooking);
   const [ticketForm, setTicketForm] = useState<TicketForm>(emptyTicket);
@@ -246,12 +270,14 @@ export default function PortalApp() {
   async function loadWorkspace(role?: string) {
     setLoading(true);
     const shouldLoadUsers = role === "SUPER_ADMIN" || currentUser?.role === "SUPER_ADMIN";
-    const [summaryData, resourceData, bookingData, ticketData, announcementData, userData] = await Promise.all([
+    const [summaryData, resourceData, bookingData, ticketData, announcementData, notificationData, notificationPreferenceData, userData] = await Promise.all([
       api("/dashboard/summary", {}, true),
       api("/resources", {}, true),
       api(`/bookings${bookingFilter ? `?status=${bookingFilter}` : ""}`, {}, true),
       api(`/maintenance${ticketFilter ? `?status=${ticketFilter}` : ""}`, {}, true),
       api("/announcements", {}, true),
+      api("/notifications", {}, true),
+      api<NotificationPreferences>("/notifications/preferences", {}, true),
       shouldLoadUsers ? api<UserProfile[]>("/users", {}, true) : Promise.resolve(null),
     ]);
     if (summaryData) setSummary(summaryData);
@@ -259,6 +285,11 @@ export default function PortalApp() {
     if (bookingData) setBookings(bookingData);
     if (ticketData) setTickets(ticketData);
     if (announcementData) setAnnouncements(announcementData);
+    if (notificationData) setNotifications(notificationData);
+    if (notificationPreferenceData) {
+      setNotificationPreferences(notificationPreferenceData);
+      setNotificationPreferenceForm(notificationPreferenceData);
+    }
     if (userData) setUsers(userData);
     if (!shouldLoadUsers) setUsers([]);
     setLoading(false);
@@ -566,7 +597,7 @@ function isStrongPassword(value: string) {
   if (booting) return <div className="startup-screen">Preparing Smart Campus portal...</div>;
   if (!currentUser) return <AuthView {...{ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }} />;
 
-  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit }} />;
+  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit }} />;
 }
 
 function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }: {
@@ -737,6 +768,10 @@ function DashboardView(props: {
   announcementTitleInputRef: RefObject<HTMLInputElement>;
   announcementContentInputRef: RefObject<HTMLTextAreaElement>;
   announcements: Announcement[];
+  notifications: Notification[];
+  notificationPreferences: NotificationPreferences | null;
+  notificationPreferenceForm: NotificationPreferences;
+  setNotificationPreferenceForm: (value: NotificationPreferences) => void;
   announcementForm: AnnouncementForm;
   setAnnouncementForm: (value: AnnouncementForm) => void;
   editingAnnouncementId: number | null;
@@ -749,10 +784,11 @@ function DashboardView(props: {
   startTicketEdit: (ticket: MaintenanceTicket) => void;
   cancelTicketEdit: () => void;
 }) {
-  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
+  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, notifications, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
   const isAdmin = currentUser.role === "ADMIN" || isSuperAdmin;
   const activeResources = resources.filter((resource) => resource.status === "ACTIVE");
+  const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
   const parseApiError = (data: unknown) => {
     if (typeof data === "object" && data !== null && "validationErrors" in data) {
       const errors = (data as { validationErrors?: Record<string, string> }).validationErrors;
@@ -765,6 +801,25 @@ function DashboardView(props: {
   };
   const updateBooking = async (id: number, status: string) => { const response = await fetch(`${API_BASE}/bookings/${id}/status?status=${status}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Booking ${pretty(status)}.` }); loadWorkspace(); } };
   const updateTicket = async (id: number, status: string) => { const q = new URLSearchParams({ status }); if (status !== "OPEN") q.append("assignedTechnician", "Campus Technical Team"); const response = await fetch(`${API_BASE}/maintenance/${id}/status?${q.toString()}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Ticket moved to ${pretty(status)}.` }); loadWorkspace(); } };
+  const markNotificationRead = async (id: number) => {
+    const response = await api<Notification>(`/notifications/${id}/read`, { method: "POST" }, true);
+    if (response) {
+      setAlert({ type: "success", message: "Notification marked as read." });
+      loadWorkspace();
+    }
+  };
+  const saveNotificationPreferences = async () => {
+    const response = await api<NotificationPreferences>("/notifications/preferences", {
+      method: "PUT",
+      body: JSON.stringify(notificationPreferenceForm),
+    });
+    if (response) {
+      setNotificationPreferences(response);
+      setNotificationPreferenceForm(response);
+      setAlert({ type: "success", message: "Notification preferences updated." });
+      loadWorkspace();
+    }
+  };
   const startAnnouncementEdit = (announcement: Announcement) => {
     setAnnouncementForm({
       title: announcement.title ?? "",
@@ -877,22 +932,22 @@ function DashboardView(props: {
 
   return (
     <div className="site-container">
-      <Header currentUser={currentUser} onLogout={handleLogout} onDeleteAccount={handleDeleteMyAccount} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <Header currentUser={currentUser} onLogout={handleLogout} onDeleteAccount={handleDeleteMyAccount} notificationCount={notifications.filter((notification) => !notification.read).length} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="site-shell">
         {alert && <div className={`alert ${alert.type}`}>{alert.message}</div>}
       <div className="portal-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
         <aside className={`sidebar ${sidebarOpen ? 'active' : ''}`}>
-          <div className="demo-card"><strong>Menu Bar</strong><p>Home, Dashboard, Resources, Bookings, and Maintenance pages are ready.</p></div>
+          <div className="demo-card"><strong>Campus Modules</strong><p>Home, Dashboard, Resources, Bookings, and Maintenance are available in one workspace.</p></div>
           <nav className="nav-stack">{navItems.map((item) => <button key={item} className={activePage === item ? "nav-link active" : "nav-link"} onClick={() => setActivePage(item)}>{pretty(item)}</button>)}</nav>
         </aside>
         <main className="main-content">
-          {activePage === "home" && <section className="hero-card"><div><span className="eyebrow light">Home Page</span><h1>Proper campus management website with login validation and operational pages.</h1><p>This home page gives the polished website feel you asked for, with image support, navigation, and quick access into the full system.</p><div className="row"><button className="primary-button" onClick={() => setActivePage("dashboard")}>Open Dashboard</button><button className="secondary-button" onClick={() => setActivePage("resources")}>Manage Resources</button></div></div><img src={campusHero} alt="Campus illustration" /></section>}
+          {activePage === "home" && <section className="hero-card"><div><span className="eyebrow light">Smart Campus Operations Hub</span><h1>Centralize campus resources, bookings, maintenance, and user access in one dashboard.</h1><p>Track operations clearly, switch between modules quickly, and present a professional system that matches your assignment flow.</p><div className="row"><button className="primary-button" onClick={() => setActivePage("dashboard")}>Open Dashboard</button><button className="secondary-button" onClick={() => setActivePage("resources")}>Manage Resources</button></div></div><img src={campusHero} alt="Campus illustration" /></section>}
           {activePage === "dashboard" && (
             <>
               <div className="dashboard-banner">
                 <h1>Dashboard</h1>
-                <p>Campus Resource Management Overview</p>
+                <p>Campus operations overview and live status at a glance</p>
               </div>
               <section className="summary-grid">
                 <StatCard label="Total Resources" value={summary?.totalResources ?? 0} />
@@ -904,7 +959,7 @@ function DashboardView(props: {
               </section>
               <section className="two-column">
                 <article className="panel">
-                  <h3>Dashboard Overview</h3>
+                  <h3>Operational Summary</h3>
                   <p>{activeResources.length} active resources are available now.</p>
                   <p>{bookings.filter((item) => item.status === "PENDING").length} bookings are waiting for review.</p>
                   <p>{tickets.filter((item) => item.status === "OPEN").length} maintenance tickets are open.</p>
@@ -993,11 +1048,60 @@ function DashboardView(props: {
                   </article>
                 </section>
               )}
+              <section className="two-column">
+                <article className="panel">
+                  <div className="row between">
+                    <h3>Notifications</h3>
+                    <span className="badge">{unreadNotificationCount} unread</span>
+                  </div>
+                  <p>Real-time campus alerts and system updates appear here.</p>
+                  <div className="notification-list">
+                    {notifications.map((notification) => (
+                      <article key={notification.id} className={`notification-item ${notification.read ? "read" : "unread"}`}>
+                        <div className="row between">
+                          <span className="chip">{pretty(notification.category)}</span>
+                          <span className="muted">{new Date(notification.createdAt).toLocaleString()}</span>
+                        </div>
+                        <h4>{notification.title}</h4>
+                        <p>{notification.message}</p>
+                        <div className="row between">
+                          <span className={notification.read ? "muted" : "pill info"}>{notification.read ? "Read" : "New"}</span>
+                          {!notification.read && (
+                            <button type="button" className="secondary-button" onClick={() => markNotificationRead(notification.id)}>
+                              Mark read
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                    {notifications.length === 0 && <p>No notifications available.</p>}
+                  </div>
+                </article>
+                <article className="panel">
+                  <h3>Notification Preferences</h3>
+                  <p>Choose which alerts should reach your dashboard.</p>
+                  <div className="notification-pref-grid">
+                    <label><input type="checkbox" checked={notificationPreferenceForm.resourceAlerts} onChange={(e) => setNotificationPreferenceForm({ ...notificationPreferenceForm, resourceAlerts: e.target.checked })} /> Resource alerts</label>
+                    <label><input type="checkbox" checked={notificationPreferenceForm.bookingAlerts} onChange={(e) => setNotificationPreferenceForm({ ...notificationPreferenceForm, bookingAlerts: e.target.checked })} /> Booking alerts</label>
+                    <label><input type="checkbox" checked={notificationPreferenceForm.maintenanceAlerts} onChange={(e) => setNotificationPreferenceForm({ ...notificationPreferenceForm, maintenanceAlerts: e.target.checked })} /> Maintenance alerts</label>
+                    <label><input type="checkbox" checked={notificationPreferenceForm.announcementAlerts} onChange={(e) => setNotificationPreferenceForm({ ...notificationPreferenceForm, announcementAlerts: e.target.checked })} /> Announcement alerts</label>
+                  </div>
+                  <div className="row">
+                    <button type="button" className="primary-button" onClick={saveNotificationPreferences}>Save preferences</button>
+                  </div>
+                  <div className="mini-metrics" style={{ marginTop: "16px" }}>
+                    <div><strong>{notificationPreferences?.resourceAlerts ? "On" : "Off"}</strong><span>Resource</span></div>
+                    <div><strong>{notificationPreferences?.bookingAlerts ? "On" : "Off"}</strong><span>Booking</span></div>
+                    <div><strong>{notificationPreferences?.maintenanceAlerts ? "On" : "Off"}</strong><span>Maintenance</span></div>
+                    <div><strong>{notificationPreferences?.announcementAlerts ? "On" : "Off"}</strong><span>Announcement</span></div>
+                  </div>
+                </article>
+              </section>
               <AnnouncementsList announcements={announcements} currentUser={currentUser} onEditAnnouncement={startAnnouncementEdit} onDeleteAnnouncement={removeAnnouncement} />
             </>
           )}
-          {activePage === "resources" && <><section className="two-column"><article ref={resourceFormRef} className="panel"><h3>{editingResourceId ? "Edit Resource" : "Add Resource"}</h3><form className="form-grid" onSubmit={saveResource}><input ref={resourceNameInputRef} value={resourceForm.name} onChange={(e) => setResourceForm({ ...resourceForm, name: e.target.value })} placeholder="Resource name" required /><select value={resourceForm.type} onChange={(e) => setResourceForm({ ...resourceForm, type: e.target.value })}>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input type="number" min="1" value={resourceForm.capacity} onChange={(e) => setResourceForm({ ...resourceForm, capacity: e.target.value })} placeholder="Capacity" required /><input value={resourceForm.location} onChange={(e) => setResourceForm({ ...resourceForm, location: e.target.value })} placeholder="Location" required /><input value={resourceForm.availabilityWindow} onChange={(e) => setResourceForm({ ...resourceForm, availabilityWindow: e.target.value })} placeholder="Availability window" required /><select value={resourceForm.status} onChange={(e) => setResourceForm({ ...resourceForm, status: e.target.value })}>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><textarea rows="4" value={resourceForm.description} onChange={(e) => setResourceForm({ ...resourceForm, description: e.target.value })} placeholder="Description" required /><div className="row"><button className="primary-button wide">{editingResourceId ? "Save" : "Add"}</button>{editingResourceId && <button type="button" className="secondary-button" onClick={() => { setEditingResourceId(null); setResourceForm(emptyResource); }}>Cancel</button>}</div></form></article><article className="panel"><h3>Resources</h3><p>Manage halls, labs, meeting rooms, and equipment with proper forms.</p></article></section><section className="card-grid">{resources.map((resource) => <article key={resource.id} className="resource-card"><div className="row between"><span className={`pill ${resource.status === "ACTIVE" ? "ok" : "warn"}`}>{pretty(resource.status)}</span><span className="muted">{pretty(resource.type)}</span></div><h3>{resource.name}</h3><p>{resource.description}</p><p><strong>Location:</strong> {resource.location}</p><p><strong>Capacity:</strong> {resource.capacity}</p><p><strong>Availability:</strong> {resource.availabilityWindow}</p><div className="row"><button className="secondary-button" onClick={() => { setActivePage("resources"); setEditingResourceId(resource.id); setResourceForm({ name: resource.name, type: resource.type, capacity: String(resource.capacity), location: resource.location, availabilityWindow: resource.availabilityWindow, status: resource.status, description: resource.description }); }}>Edit</button><button className="danger-button" onClick={() => removeResource(resource.id)}>Delete</button></div></article>)}</section></>}
-          {activePage === "bookings" && <section className="two-column"><article className="panel"><h3>Booking Form</h3><form className="form-grid" onSubmit={saveBooking}><select value={bookingForm.resourceId} onChange={(e) => setBookingForm({ ...bookingForm, resourceId: e.target.value })} required><option value="">Select resource</option>{activeResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}</select><input value={bookingForm.requestedBy} onChange={(e) => setBookingForm({ ...bookingForm, requestedBy: e.target.value })} placeholder="Requested by" required /><select value={bookingForm.department} onChange={(e) => setBookingForm({ ...bookingForm, department: e.target.value })} required><option value="">Select department</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select><select value={bookingForm.academicYear} onChange={(e) => setBookingForm({ ...bookingForm, academicYear: e.target.value })} required><option value="">Select year</option>{academicYears.map((year) => <option key={year} value={year}>{year}</option>)}</select><select value={bookingForm.semester} onChange={(e) => setBookingForm({ ...bookingForm, semester: e.target.value })} required><option value="">Select semester</option>{semesters.map((semester) => <option key={semester} value={semester}>{semester}</option>)}</select><input type="date" value={bookingForm.bookingDate} onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })} required /><div className="row"><input type="time" value={bookingForm.startTime} onChange={(e) => setBookingForm({ ...bookingForm, startTime: e.target.value })} required /><input type="time" value={bookingForm.endTime} onChange={(e) => setBookingForm({ ...bookingForm, endTime: e.target.value })} required /></div><input type="number" min="1" value={bookingForm.expectedAttendees} onChange={(e) => setBookingForm({ ...bookingForm, expectedAttendees: e.target.value })} placeholder="Expected attendees" required /><textarea rows="4" value={bookingForm.purpose} onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })} placeholder="Purpose" required /><button className="primary-button wide">Submit Booking</button></form></article><article className="panel"><div className="row between"><h3>Booking Queue</h3><select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}><option value="">All</option>{bookingStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select></div><div className="table-list">{bookings.map((booking) => <div key={booking.id} className="table-card"><div><strong>{booking.resource.name}</strong><p>{booking.requestedBy} from {booking.department}</p><p>{booking.academicYear ? `${booking.academicYear} | ${booking.semester ?? ""}` : "Academic year not set"}</p><p>{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p><p>{booking.purpose}</p></div><div className="table-actions"><span className={`pill ${booking.status === "APPROVED" ? "ok" : booking.status === "REJECTED" ? "muted-pill" : "info"}`}>{pretty(booking.status)}</span>{booking.status === "PENDING" && <><button className="primary-button" onClick={() => updateBooking(booking.id, "APPROVED")}>Approve</button><button className="danger-button" onClick={() => updateBooking(booking.id, "REJECTED")}>Reject</button></>}</div></div>)}</div></article></section>}
+          {activePage === "resources" && <><section className="two-column"><article ref={resourceFormRef} className="panel"><h3>{editingResourceId ? "Edit Resource" : "Add Resource"}</h3><form className="form-grid" onSubmit={saveResource}><input ref={resourceNameInputRef} value={resourceForm.name} onChange={(e) => setResourceForm({ ...resourceForm, name: e.target.value })} placeholder="Resource name" required /><select value={resourceForm.type} onChange={(e) => setResourceForm({ ...resourceForm, type: e.target.value })}>{resourceTypes.map((type) => <option key={type} value={type}>{pretty(type)}</option>)}</select><input type="number" min="1" value={resourceForm.capacity} onChange={(e) => setResourceForm({ ...resourceForm, capacity: e.target.value })} placeholder="Capacity" required /><input value={resourceForm.location} onChange={(e) => setResourceForm({ ...resourceForm, location: e.target.value })} placeholder="Location" required /><input value={resourceForm.availabilityWindow} onChange={(e) => setResourceForm({ ...resourceForm, availabilityWindow: e.target.value })} placeholder="Availability window" required /><select value={resourceForm.status} onChange={(e) => setResourceForm({ ...resourceForm, status: e.target.value })}>{resourceStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select><textarea rows="4" value={resourceForm.description} onChange={(e) => setResourceForm({ ...resourceForm, description: e.target.value })} placeholder="Description" required /><div className="row"><button className="primary-button wide">{editingResourceId ? "Save" : "Add"}</button>{editingResourceId && <button type="button" className="secondary-button" onClick={() => { setEditingResourceId(null); setResourceForm(emptyResource); }}>Cancel</button>}</div></form></article><article className="panel"><h3>Resources</h3><p>Manage lecture halls, labs, meeting rooms, and equipment with structured forms and quick updates.</p></article></section><section className="card-grid">{resources.map((resource) => <article key={resource.id} className="resource-card"><div className="row between"><span className={`pill ${resource.status === "ACTIVE" ? "ok" : "warn"}`}>{pretty(resource.status)}</span><span className="muted">{pretty(resource.type)}</span></div><h3>{resource.name}</h3><p>{resource.description}</p><p><strong>Location:</strong> {resource.location}</p><p><strong>Capacity:</strong> {resource.capacity}</p><p><strong>Availability:</strong> {resource.availabilityWindow}</p><div className="row"><button className="secondary-button" onClick={() => { setActivePage("resources"); setEditingResourceId(resource.id); setResourceForm({ name: resource.name, type: resource.type, capacity: String(resource.capacity), location: resource.location, availabilityWindow: resource.availabilityWindow, status: resource.status, description: resource.description }); }}>Edit</button><button className="danger-button" onClick={() => removeResource(resource.id)}>Delete</button></div></article>)}</section></>}
+          {activePage === "bookings" && <section className="two-column"><article className="panel"><h3>Booking Form</h3><form className="form-grid" onSubmit={saveBooking}><select value={bookingForm.resourceId} onChange={(e) => setBookingForm({ ...bookingForm, resourceId: e.target.value })} required><option value="">Select resource</option>{activeResources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}</select><input value={bookingForm.requestedBy} onChange={(e) => setBookingForm({ ...bookingForm, requestedBy: e.target.value })} placeholder="Requested by" required /><select value={bookingForm.department} onChange={(e) => setBookingForm({ ...bookingForm, department: e.target.value })} required><option value="">Select department</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select><select value={bookingForm.academicYear} onChange={(e) => setBookingForm({ ...bookingForm, academicYear: e.target.value })} required><option value="">Select year</option>{academicYears.map((year) => <option key={year} value={year}>{year}</option>)}</select><select value={bookingForm.semester} onChange={(e) => setBookingForm({ ...bookingForm, semester: e.target.value })} required><option value="">Select semester</option>{semesters.map((semester) => <option key={semester} value={semester}>{semester}</option>)}</select><input type="date" value={bookingForm.bookingDate} onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })} required /><div className="row"><input type="time" value={bookingForm.startTime} onChange={(e) => setBookingForm({ ...bookingForm, startTime: e.target.value })} required /><input type="time" value={bookingForm.endTime} onChange={(e) => setBookingForm({ ...bookingForm, endTime: e.target.value })} required /></div><input type="number" min="1" value={bookingForm.expectedAttendees} onChange={(e) => setBookingForm({ ...bookingForm, expectedAttendees: e.target.value })} placeholder="Expected attendees" required /><textarea rows="4" value={bookingForm.purpose} onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })} placeholder="Purpose" required /><button className="primary-button wide">Submit Booking</button></form></article><article className="panel"><div className="row between"><h3>Booking Queue</h3><select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}><option value="">All</option>{bookingStatuses.map((status) => <option key={status} value={status}>{pretty(status)}</option>)}</select></div><div className="table-list">{bookings.map((booking) => <div key={booking.id} className="table-card"><div><strong>{booking.resource.name}</strong><p>{booking.requestedBy} from {booking.department}</p><p>{booking.academicYear ? `${booking.academicYear} | ${booking.semester ?? ""}` : "Academic year not specified"}</p><p>{booking.bookingDate} | {booking.startTime} - {booking.endTime}</p><p>{booking.purpose}</p></div><div className="table-actions"><span className={`pill ${booking.status === "APPROVED" ? "ok" : booking.status === "REJECTED" ? "muted-pill" : "info"}`}>{pretty(booking.status)}</span>{booking.status === "PENDING" && <><button className="primary-button" onClick={() => updateBooking(booking.id, "APPROVED")}>Approve</button><button className="danger-button" onClick={() => updateBooking(booking.id, "REJECTED")}>Reject</button></>}</div></div>)}</div></article></section>}
           {activePage === "maintenance" && (
             <section className="two-column">
               <article ref={maintenanceFormRef} className="panel">
@@ -1057,7 +1161,7 @@ function DashboardView(props: {
               </article>
               <article className="panel">
                 <div className="row between">
-                  <h3>Maintenance Queue</h3>
+                  <h3>Ticket Queue</h3>
                   <select value={ticketFilter} onChange={(e) => setTicketFilter(e.target.value)}>
                     <option value="">All</option>
                     {maintenanceStatuses.map((status) => (

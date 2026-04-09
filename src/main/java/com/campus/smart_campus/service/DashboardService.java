@@ -30,12 +30,14 @@ public class DashboardService {
         return new DashboardSummary(
                 resourceRepository.count(),
                 resourceRepository.findByStatus(ResourceStatus.ACTIVE).size(),
-                resourceRepository.findByStatus(ResourceStatus.OUT_OF_SERVICE).size(),
+                resourceRepository.findByStatus(ResourceStatus.OUT_OF_SERVICE).size()
+                        + resourceRepository.findByStatus(ResourceStatus.MAINTENANCE).size(),
                 bookingRepository.findByStatusOrderByBookingDateAscStartTimeAsc(BookingStatus.PENDING).size(),
                 bookingRepository.findByStatusOrderByBookingDateAscStartTimeAsc(BookingStatus.APPROVED).size(),
                 maintenanceTicketRepository.findByStatusOrderByCreatedAtDesc(MaintenanceStatus.OPEN).size()
                         + maintenanceTicketRepository.findByStatusOrderByCreatedAtDesc(MaintenanceStatus.IN_PROGRESS).size(),
                 maintenanceTicketRepository.findByStatusOrderByCreatedAtDesc(MaintenanceStatus.RESOLVED).size()
+                        + maintenanceTicketRepository.findByStatusOrderByCreatedAtDesc(MaintenanceStatus.CLOSED).size()
         );
     }
 }

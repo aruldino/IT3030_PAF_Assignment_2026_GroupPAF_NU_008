@@ -78,7 +78,7 @@ public class DataInitializer {
                         1,
                         "Media Store",
                         "Daily 08:30-16:30",
-                        ResourceStatus.OUT_OF_SERVICE,
+                        ResourceStatus.MAINTENANCE,
                         "Portable projector bundle currently awaiting lamp replacement."
                 );
 
@@ -117,7 +117,7 @@ public class DataInitializer {
                         "Projector lamp does not power on and the casing is overheating.",
                         "Media Unit",
                         MaintenancePriority.HIGH,
-                        MaintenanceStatus.IN_PROGRESS,
+                        MaintenanceStatus.CLOSED,
                         "Technician Fernando"
                 ));
                 @SuppressWarnings({"null", "unused"})

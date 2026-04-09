@@ -1,5 +1,7 @@
 package com.campus.smart_campus.controller;
 
+import com.campus.smart_campus.dto.MaintenanceAttachmentRequest;
+import com.campus.smart_campus.dto.MaintenanceCommentRequest;
 import com.campus.smart_campus.dto.MaintenanceRequest;
 import com.campus.smart_campus.model.MaintenanceStatus;
 import com.campus.smart_campus.model.MaintenanceTicket;
@@ -17,11 +19,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/maintenance")
+@RequestMapping({"/api/maintenance", "/tickets"})
 public class MaintenanceController {
 
     private final MaintenanceService maintenanceService;
@@ -46,13 +49,31 @@ public class MaintenanceController {
         return maintenanceService.updateTicket(id, request);
     }
 
-    @PatchMapping("/{id}/status")
+    @PutMapping("/{id}/assign")
+    public MaintenanceTicket assignTechnician(
+            @PathVariable Long id,
+            @RequestParam String technician
+    ) {
+        return maintenanceService.assignTechnician(id, technician);
+    }
+
+    @PutMapping("/{id}/status")
     public MaintenanceTicket updateTicketStatus(
             @PathVariable Long id,
             @RequestParam MaintenanceStatus status,
             @RequestParam(required = false) String assignedTechnician
     ) {
         return maintenanceService.updateStatus(id, status, assignedTechnician);
+    }
+
+    @PostMapping("/{id}/comments")
+    public List<String> addComment(@PathVariable Long id, @Valid @RequestBody MaintenanceCommentRequest request) {
+        return maintenanceService.addComment(id, request.author(), request.comment());
+    }
+
+    @PostMapping("/{id}/attachments")
+    public List<String> addAttachments(@PathVariable Long id, @Valid @RequestBody MaintenanceAttachmentRequest request) {
+        return maintenanceService.addAttachments(id, request.attachments());
     }
 
     @DeleteMapping("/{id}")

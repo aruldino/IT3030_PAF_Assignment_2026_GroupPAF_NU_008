@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStatusOrderByBookingDateAscStartTimeAsc(BookingStatus status);
+    List<Booking> findByResource_IdOrderByBookingDateAscStartTimeAsc(Long resourceId);
 
     @Query("""
             select case when count(b) > 0 then true else false end
@@ -23,6 +24,24 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
               and b.endTime > :startTime
             """)
     boolean hasApprovedConflict(
+            @Param("resourceId") Long resourceId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime
+    );
+
+    @Query("""
+            select b
+            from Booking b
+            where b.resource.id = :resourceId
+              and b.bookingDate = :bookingDate
+              and b.status in (com.campus.smart_campus.model.BookingStatus.PENDING,
+                               com.campus.smart_campus.model.BookingStatus.APPROVED)
+              and b.startTime < :endTime
+              and b.endTime > :startTime
+            order by b.startTime asc
+            """)
+    List<Booking> findConflicts(
             @Param("resourceId") Long resourceId,
             @Param("bookingDate") LocalDate bookingDate,
             @Param("startTime") LocalTime startTime,

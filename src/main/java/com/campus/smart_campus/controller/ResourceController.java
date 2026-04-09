@@ -1,6 +1,7 @@
 package com.campus.smart_campus.controller;
 
 import com.campus.smart_campus.dto.ResourceRequest;
+import com.campus.smart_campus.dto.ResourceAvailabilityResponse;
 import com.campus.smart_campus.model.Resource;
 import com.campus.smart_campus.model.ResourceStatus;
 import com.campus.smart_campus.model.ResourceType;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/resources")
+@RequestMapping({"/api/resources", "/resources"})
 public class ResourceController {
 
     private static final Logger logger = LoggerFactory.getLogger(ResourceController.class);
@@ -30,17 +31,23 @@ public class ResourceController {
     public List<Resource> getAllResources(
             @RequestParam(required = false) ResourceType type,
             @RequestParam(required = false) String location,
-            @RequestParam(required = false) Integer minCapacity,
+            @RequestParam(required = false) Integer capacity,
             @RequestParam(required = false) ResourceStatus status
     ) {
         logger.info("GET /api/resources - Fetching resources");
-        return resourceService.searchResources(type, location, minCapacity, status);
+        return resourceService.searchResources(type, location, capacity, status);
     }
 
     @GetMapping("/{id}")
     public Resource getResourceById(@PathVariable Long id) {
         logger.info("GET /api/resources/{} - Fetching resource", id);
         return resourceService.getResourceById(id);
+    }
+
+    @GetMapping("/{id}/availability")
+    public ResourceAvailabilityResponse getAvailability(@PathVariable Long id) {
+        logger.info("GET /api/resources/{}/availability - Fetching availability", id);
+        return resourceService.getAvailability(id);
     }
 
     @PostMapping

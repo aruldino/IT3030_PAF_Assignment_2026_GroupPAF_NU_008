@@ -2,5 +2,6 @@ package com.campus.smart_campus.model;
 
 public enum ResourceStatus {
     ACTIVE,
-    OUT_OF_SERVICE
+    OUT_OF_SERVICE,
+    MAINTENANCE
 }
