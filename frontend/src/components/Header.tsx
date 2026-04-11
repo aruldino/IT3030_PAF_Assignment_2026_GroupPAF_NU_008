@@ -72,7 +72,7 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
               aria-label={`${notificationCount} unread notifications`}
               onClick={onAlertsClick}
             >
-              Alerts {notificationCount}
+              Notifications {notificationCount}
             </button>
             <button
               type="button"

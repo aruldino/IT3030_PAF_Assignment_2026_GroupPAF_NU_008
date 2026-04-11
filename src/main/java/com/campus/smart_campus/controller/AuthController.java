@@ -5,6 +5,7 @@ import com.campus.smart_campus.dto.RegisterRequest;
 import com.campus.smart_campus.dto.UserProfileResponse;
 import com.campus.smart_campus.config.GoogleOAuth2Properties;
 import com.campus.smart_campus.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -50,7 +51,7 @@ public class AuthController {
     }
 
     @GetMapping("/google")
-    public void googleLogin(HttpSession session, HttpServletResponse response) throws IOException {
+    public void googleLogin(HttpServletRequest request, HttpSession session, HttpServletResponse response) throws IOException {
         if (googleOAuth2Properties.isDevAdminShortcutEnabled()) {
             authService.loginAsAdminShortcut(
                     googleOAuth2Properties.getDevAdminName(),
@@ -61,11 +62,17 @@ public class AuthController {
             return;
         }
 
-        if (!googleOAuth2Properties.isEnabled()
-                || googleOAuth2Properties.getClientId().isBlank()
-                || googleOAuth2Properties.getClientSecret().isBlank()) {
+        boolean clientConfigured = !googleOAuth2Properties.getClientId().isBlank()
+                && !googleOAuth2Properties.getClientSecret().isBlank();
+
+        if (!googleOAuth2Properties.isEnabled() || !clientConfigured) {
+            String messageText = "Google login is not configured on this server.";
+            if (!googleOAuth2Properties.getApiKey().isBlank() && !clientConfigured) {
+                messageText = "GOOGLE_API_KEY alone is not enough. Configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.";
+            }
+
             String message = URLEncoder.encode(
-                    "Google login is not configured on this server.",
+                    messageText,
                     StandardCharsets.UTF_8
             );
             String delimiter = googleOAuth2Properties.getFrontendFailureUrl().contains("?") ? "&" : "?";
@@ -73,7 +80,30 @@ public class AuthController {
             return;
         }
 
-        response.sendRedirect(googleOAuth2Properties.getAuthorizationUrl());
+        response.sendRedirect(resolveAuthorizationUrl(request, googleOAuth2Properties.getAuthorizationUrl()));
+    }
+
+    private String resolveAuthorizationUrl(HttpServletRequest request, String configuredAuthorizationUrl) {
+        String rawUrl = configuredAuthorizationUrl == null ? "" : configuredAuthorizationUrl.trim();
+        if (rawUrl.isBlank()) {
+            rawUrl = "/oauth2/authorization/google";
+        }
+
+        if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+            return rawUrl;
+        }
+
+        String path = rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl;
+        String scheme = request.getScheme();
+        int port = request.getServerPort();
+        boolean defaultPort = ("http".equalsIgnoreCase(scheme) && port == 80)
+                || ("https".equalsIgnoreCase(scheme) && port == 443);
+
+        String host = defaultPort
+                ? scheme + "://" + request.getServerName()
+                : scheme + "://" + request.getServerName() + ":" + port;
+
+        return host + path;
     }
 
     @GetMapping("/me")

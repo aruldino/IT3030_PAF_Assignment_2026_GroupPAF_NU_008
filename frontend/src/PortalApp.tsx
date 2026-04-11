@@ -140,6 +140,34 @@ type Notification = {
   createdAt: string;
 };
 
+const ANNOUNCEMENT_NOTIFICATION_ID_OFFSET = 10_000_000_000;
+const SYSTEM_NOTIFICATION_ID_OFFSET = 20_000_000_000;
+const MAX_NOTIFICATION_ITEMS = 200;
+
+function mergeNotifications(existing: Notification[], incoming: Notification[]) {
+  const mergedById = new Map<number, Notification>();
+
+  incoming.forEach((notification) => {
+    mergedById.set(notification.id, notification);
+  });
+
+  existing.forEach((notification) => {
+    const current = mergedById.get(notification.id);
+    if (!current) {
+      mergedById.set(notification.id, notification);
+      return;
+    }
+
+    if (notification.read && !current.read) {
+      mergedById.set(notification.id, { ...current, read: true });
+    }
+  });
+
+  return Array.from(mergedById.values())
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, MAX_NOTIFICATION_ITEMS);
+}
+
 type NotificationPreferences = {
   resourceAlerts: boolean;
   bookingAlerts: boolean;
@@ -446,7 +474,6 @@ export default function PortalApp() {
   const announcementFormRef = useRef<HTMLElement | null>(null);
   const announcementTitleInputRef = useRef<HTMLInputElement | null>(null);
   const announcementContentInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const alertTimerRef = useRef<number | null>(null);
 
   useEffect(() => { bootstrap(); }, []);
 
@@ -497,19 +524,20 @@ export default function PortalApp() {
       ...current,
     ].slice(0, 6));
 
-    if (alertTimerRef.current) {
-      window.clearTimeout(alertTimerRef.current);
+    if (!currentUser) {
+      return;
     }
 
-    alertTimerRef.current = window.setTimeout(() => {
-      setAlert(null);
-    }, 4000);
-
-    return () => {
-      if (alertTimerRef.current) {
-        window.clearTimeout(alertTimerRef.current);
-      }
+    const systemNotification: Notification = {
+      id: SYSTEM_NOTIFICATION_ID_OFFSET + Date.now(),
+      title: alert.type === "error" ? "Action required" : "Update",
+      message: alert.message,
+      category: "SYSTEM",
+      read: false,
+      createdAt: new Date().toISOString(),
     };
+
+    setNotifications((current) => mergeNotifications(current, [systemNotification]));
   }, [alert]);
 
   useEffect(() => {
@@ -520,7 +548,7 @@ export default function PortalApp() {
     const refreshNotifications = () => {
       api<Notification[]>("/notifications", {}, true).then((data) => {
         if (data) {
-          setNotifications(data);
+          setNotifications((current) => mergeNotifications(current, data));
         }
       });
     };
@@ -529,6 +557,29 @@ export default function PortalApp() {
     const interval = window.setInterval(refreshNotifications, 15000);
     return () => window.clearInterval(interval);
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || announcements.length === 0) {
+      return;
+    }
+
+    setNotifications((current) => {
+      const announcementNotifications: Notification[] = announcements.map((announcement) => {
+        const syntheticId = ANNOUNCEMENT_NOTIFICATION_ID_OFFSET + announcement.id;
+        const existingNotification = current.find((notification) => notification.id === syntheticId);
+        return {
+          id: syntheticId,
+          title: announcement.title,
+          message: announcement.content,
+          category: "ANNOUNCEMENT",
+          read: existingNotification?.read ?? false,
+          createdAt: announcement.createdAt,
+        };
+      });
+
+      return mergeNotifications(current, announcementNotifications);
+    });
+  }, [currentUser, announcements]);
 
   async function bootstrap() {
     const profile = await api<UserProfile>("/auth/me", {}, true);
@@ -586,7 +637,9 @@ export default function PortalApp() {
     if (bookingData) setBookings(bookingData);
     if (ticketData) setTickets(ticketData);
     if (announcementData) setAnnouncements(announcementData);
-    if (notificationData) setNotifications(notificationData);
+    if (notificationData) {
+      setNotifications((current) => mergeNotifications(current, notificationData));
+    }
     if (notificationPreferenceData) {
       setNotificationPreferences(notificationPreferenceData);
       setNotificationPreferenceForm(notificationPreferenceData);
@@ -914,7 +967,16 @@ function isStrongPassword(value: string) {
     }
 
     const raw = await response.text();
-    setAlert({ type: "error", message: raw || "CSV import failed." });
+    let parsed: unknown = raw;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch {
+        parsed = raw;
+      }
+    }
+
+    setAlert({ type: "error", message: formatError(parsed) || "CSV import failed." });
   }
 
   async function saveBooking(event: FormEvent<HTMLFormElement>) {
@@ -984,12 +1046,12 @@ function isStrongPassword(value: string) {
   }
 
   if (booting) return <div className="startup-screen">Preparing Smart Campus portal...</div>;
-  if (!currentUser) return <AuthView {...{ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }} />;
+  if (!currentUser) return <AuthView {...{ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, campusHero, authErrors, setAuthErrors }} />;
 
-  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, alertHistory, notifications, notificationsPopupOpen, setNotificationsPopupOpen, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources }} />;
+  return <DashboardView {...{ currentUser, activePage, setActivePage, navItems, summary, resources, bookings, tickets, users, alertHistory, notifications, setNotifications, notificationsPopupOpen, setNotificationsPopupOpen, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources }} />;
 }
 
-function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, alert, campusHero, authErrors, setAuthErrors }: {
+function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, setRegisterForm, handleLogin, handleRegister, campusHero, authErrors, setAuthErrors }: {
   authTab: string;
   setAuthTab: (value: string) => void;
   loginForm: LoginForm;
@@ -998,7 +1060,6 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
   setRegisterForm: (value: RegisterForm) => void;
   handleLogin: (event: FormEvent<HTMLFormElement>) => void;
   handleRegister: (event: FormEvent<HTMLFormElement>) => void;
-  alert: AlertState;
   campusHero: string;
   authErrors: AuthErrors;
   setAuthErrors: (value: AuthErrors | ((current: AuthErrors) => AuthErrors)) => void;
@@ -1008,12 +1069,6 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
       <section className="auth-hero"><div><span className="eyebrow">Smart Campus Portal</span><h1>Proper login system, home page, menu bar, and dashboard.</h1><p>This portal now has protected login, validation checks, and a more complete website experience.</p><div className="demo-card"><strong>Demo accounts</strong><p>superadmin@smartcampus.lk / SuperAdmin@123</p><p>admin@smartcampus.lk / Admin@123</p><p>student@smartcampus.lk / Student@123</p><p>staff@smartcampus.lk / Staff@123</p><p>tech@smartcampus.lk / Tech@123</p><small className="field-hint">Hierarchy: {roleHierarchy.join(" > ")}</small></div></div><img src={campusHero} alt="Campus visual" /></section>
       <section className="auth-panel">
         <div className="tab-row"><button className={authTab === "login" ? "tab active" : "tab"} onClick={() => setAuthTab("login")}>Login</button><button className={authTab === "register" ? "tab active" : "tab"} onClick={() => setAuthTab("register")}>Register</button></div>
-        {alert && (
-          <div className={`alert auth-alert ${alert.type}`} role="alert" aria-live="assertive">
-            <span className="auth-alert-icon">{alert.type === "error" ? "!" : "i"}</span>
-            <span>{alert.message || (authTab === "login" ? "Login failed. Check email and password." : "Please fix the highlighted fields.")}</span>
-          </div>
-        )}
         {authTab === "login" ? (
           <form className="auth-form" onSubmit={handleLogin} noValidate>
             <input
@@ -1021,7 +1076,6 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
               value={loginForm.email}
               onChange={(e) => {
                 setLoginForm({ ...loginForm, email: e.target.value });
-                if (alert?.type === "error") setAlert(null);
                 if (authErrors.login.email) setAuthErrors((current) => ({ ...current, login: { ...current.login, email: "" } }));
               }}
               placeholder="Email"
@@ -1033,7 +1087,6 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
               value={loginForm.password}
               onChange={(e) => {
                 setLoginForm({ ...loginForm, password: e.target.value });
-                if (alert?.type === "error") setAlert(null);
                 if (authErrors.login.password) setAuthErrors((current) => ({ ...current, login: { ...current.login, password: "" } }));
               }}
               placeholder="Password"
@@ -1043,12 +1096,20 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
             <button className="primary-button wide">Login</button>
               <button
                 type="button"
-                className="secondary-button wide"
+                className="secondary-button wide google-auth-button"
                 onClick={() => {
                 window.location.href = GOOGLE_LOGIN_URL;
               }}
             >
-              Continue with Google
+              <span className="google-logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                  <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.5 14.5 2.7 12 2.7 6.9 2.7 2.8 6.8 2.8 12S6.9 21.3 12 21.3c6.9 0 9.2-4.8 9.2-7.3 0-.5 0-.9-.1-1.3H12z"/>
+                  <path fill="#34A853" d="M3.8 7.8l3.2 2.3c.9-2.6 2.8-4.1 5-4.1 1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.5 14.5 2.7 12 2.7 8.4 2.7 5.3 4.7 3.8 7.8z"/>
+                  <path fill="#4285F4" d="M12 21.3c2.5 0 4.6-.8 6.1-2.2l-2.8-2.3c-.8.6-1.9 1.1-3.3 1.1-3.9 0-5.3-2.5-5.6-3.8l-3.2 2.5c1.5 3.1 4.7 4.7 8.8 4.7z"/>
+                  <path fill="#FBBC05" d="M3.8 16.2l3.2-2.5c-.1-.4-.2-.9-.2-1.4s.1-1 .2-1.4L3.8 7.8C3.2 9 2.8 10.4 2.8 12s.4 3 1 4.2z"/>
+                </svg>
+              </span>
+              <span>Continue with Google</span>
             </button>
           </form>
         ) : (
@@ -1127,7 +1188,6 @@ function DashboardView(props: {
   activePage: string;
   setActivePage: (value: string) => void;
   navItems: string[];
-  alert: AlertState;
   summary: SummaryStats | null;
   resources: Resource[];
   bookings: Booking[];
@@ -1172,6 +1232,7 @@ function DashboardView(props: {
   announcements: Announcement[];
     alertHistory: AlertHistoryItem[];
     notifications: Notification[];
+    setNotifications: (value: Notification[] | ((current: Notification[]) => Notification[])) => void;
     notificationsPopupOpen: boolean;
     setNotificationsPopupOpen: (value: boolean) => void;
     notificationPreferences: NotificationPreferences | null;
@@ -1204,7 +1265,7 @@ function DashboardView(props: {
   startTicketEdit: (ticket: MaintenanceTicket) => void;
   cancelTicketEdit: () => void;
 }) {
-  const { currentUser, activePage, setActivePage, navItems, alert, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, alertHistory, notifications, notificationsPopupOpen, setNotificationsPopupOpen, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
+  const { currentUser, activePage, setActivePage, navItems, summary, resources, bookings, tickets, users, resourceForm, setResourceForm, bookingForm, setBookingForm, ticketForm, setTicketForm, saveResource, saveBooking, saveTicket, saveAnnouncement, resourceTypes, resourceStatuses, bookingStatuses, maintenancePriorities, maintenanceStatuses, pretty, handleLogout, handleDeleteMyAccount, handleDeleteUserAccount, campusHero, editingResourceId, setEditingResourceId, setAlert, loadWorkspace, setBookingFilter, bookingFilter, setTicketFilter, ticketFilter, loading, resourceFormRef, resourceNameInputRef, maintenanceFormRef, maintenanceIssueInputRef, announcementFormRef, announcementTitleInputRef, announcementContentInputRef, announcements, alertHistory, notifications, setNotifications, notificationsPopupOpen, setNotificationsPopupOpen, notificationPreferences, notificationPreferenceForm, setNotificationPreferenceForm, resourceSearch, setResourceSearch, resourceTypeFilter, setResourceTypeFilter, resourceLocationFilter, setResourceLocationFilter, resourceCapacityFilter, setResourceCapacityFilter, resourceStatusFilter, setResourceStatusFilter, resourceSuggestions, resourceCsvFile, setResourceCsvFile, resourceAnalytics, importResources, announcementForm, setAnnouncementForm, editingAnnouncementId, setEditingAnnouncementId, editingTicketId, setEditingTicketId, sidebarOpen, setSidebarOpen, startTicketEdit, cancelTicketEdit } = props;
     const currentRole = roleAliases[currentUser.role] ?? currentUser.role;
     const isSuperAdmin = currentRole === "SUPER_ADMIN";
     const isAdmin = currentRole === "ADMIN" || isSuperAdmin;
@@ -1275,10 +1336,14 @@ function DashboardView(props: {
     const updateBooking = async (id: number, status: string) => { const response = await fetch(`${API_BASE}/bookings/${id}/status?status=${status}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Booking ${pretty(status)}.` }); loadWorkspace(); } };
   const updateTicket = async (id: number, status: string) => { const q = new URLSearchParams({ status }); if (status !== "OPEN") q.append("assignedTechnician", "Campus Technical Team"); const response = await fetch(`${API_BASE}/maintenance/${id}/status?${q.toString()}`, { method: "PATCH", credentials: "include" }); if (response.ok) { setAlert({ type: "success", message: `Ticket moved to ${pretty(status)}.` }); loadWorkspace(); } };
   const markNotificationRead = async (id: number) => {
+      if (id >= ANNOUNCEMENT_NOTIFICATION_ID_OFFSET) {
+        setNotifications((current) => current.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)));
+        return;
+      }
+
     const response = await api<Notification>(`/notifications/${id}/read`, { method: "POST" }, true);
     if (response) {
-      setAlert({ type: "success", message: "Notification marked as read." });
-      loadWorkspace();
+        setNotifications((current) => current.map((notification) => (notification.id === id ? { ...notification, read: true } : notification)));
     }
   };
   const saveNotificationPreferences = async () => {
@@ -1493,7 +1558,7 @@ function DashboardView(props: {
             <div className="row between">
               <div>
                 <h3>Notifications</h3>
-                <p>Latest campus alerts, approvals, and ticket updates</p>
+                <p>Latest campus alerts, login updates, and announcement updates</p>
               </div>
               <button type="button" className="secondary-button" onClick={() => setNotificationsPopupOpen(false)}>
                 Close
@@ -1524,7 +1589,6 @@ function DashboardView(props: {
         </div>
       )}
       <div className="site-shell">
-        {alert && <div className={`alert toast-banner ${alert.type}`} role="status" aria-live="polite">{alert.message}</div>}
       <div className="portal-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
         <aside className={`sidebar ${sidebarOpen ? 'active' : ''}`}>

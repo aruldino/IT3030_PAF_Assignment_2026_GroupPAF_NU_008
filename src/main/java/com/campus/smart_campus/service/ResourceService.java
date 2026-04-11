@@ -12,9 +12,9 @@ import com.campus.smart_campus.model.ResourceType;
 import com.campus.smart_campus.repository.BookingRepository;
 import com.campus.smart_campus.repository.ResourceRepository;
 import com.campus.smart_campus.repository.MaintenanceTicketRepository;
+import java.util.ArrayList;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -149,38 +149,67 @@ public class ResourceService {
             throw new BusinessException("CSV file is empty.");
         }
 
-        List<Resource> savedResources = new java.util.ArrayList<>();
+        List<Resource> savedResources = new ArrayList<>();
+        List<String> rowErrors = new ArrayList<>();
+        Character delimiter = null;
+        int lineNumber = 0;
+
         try (BufferedReader reader = new BufferedReader(new StringReader(csvContent))) {
             String line;
-            boolean firstLine = true;
             while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                line = stripBom(line).trim();
                 if (line.isBlank()) {
                     continue;
                 }
 
-                String[] parts = line.split(",", -1);
-                if (firstLine && parts.length > 0 && "name".equalsIgnoreCase(parts[0].trim())) {
-                    firstLine = false;
-                    continue;
-                }
-                firstLine = false;
-
-                if (parts.length < 7) {
-                    continue;
+                if (delimiter == null) {
+                    delimiter = detectDelimiter(line);
                 }
 
-                Resource resource = findByName(parts[0].trim()).orElseGet(Resource::new);
-                resource.setName(parts[0].trim());
-                resource.setType(ResourceType.valueOf(parts[1].trim().toUpperCase(Locale.ROOT)));
-                resource.setCapacity(Integer.parseInt(parts[2].trim()));
-                resource.setLocation(parts[3].trim());
-                resource.setAvailabilityWindow(parts[4].trim());
-                resource.setStatus(ResourceStatus.valueOf(parts[5].trim().toUpperCase(Locale.ROOT)));
-                resource.setDescription(parts[6].trim());
-                savedResources.add(resourceRepository.save(resource));
+                List<String> parts = parseCsvColumns(line, delimiter);
+
+                if (lineNumber == 1 && isHeaderRow(parts)) {
+                    continue;
+                }
+
+                if (parts.size() < 7) {
+                    rowErrors.add("Line " + lineNumber + ": expected 7 columns (name,type,capacity,location,availabilityWindow,status,description).");
+                    continue;
+                }
+
+                try {
+                    String name = requiredValue(parts.get(0), "name", lineNumber);
+                    ResourceType type = parseResourceType(parts.get(1), lineNumber);
+                    int capacity = parseCapacity(parts.get(2), lineNumber);
+                    String location = requiredValue(parts.get(3), "location", lineNumber);
+                    String availabilityWindow = requiredValue(parts.get(4), "availabilityWindow", lineNumber);
+                    ResourceStatus status = parseResourceStatus(parts.get(5), lineNumber);
+                    String description = requiredValue(parts.get(6), "description", lineNumber);
+
+                    Resource resource = findByName(name).orElseGet(Resource::new);
+                    resource.setName(name);
+                    resource.setType(type);
+                    resource.setCapacity(capacity);
+                    resource.setLocation(location);
+                    resource.setAvailabilityWindow(availabilityWindow);
+                    resource.setStatus(status);
+                    resource.setDescription(description);
+
+                    savedResources.add(resourceRepository.save(resource));
+                } catch (IllegalArgumentException exception) {
+                    rowErrors.add("Line " + lineNumber + ": " + exception.getMessage());
+                }
             }
         } catch (IOException ex) {
             throw new BusinessException("Unable to read CSV file.");
+        }
+
+        if (savedResources.isEmpty()) {
+            if (!rowErrors.isEmpty()) {
+                throw new BusinessException("CSV import failed. " + rowErrors.get(0));
+            }
+            throw new BusinessException("CSV file has no valid data rows.");
         }
 
         return savedResources;
@@ -342,5 +371,138 @@ public class ResourceService {
         return resourceRepository.findAll().stream()
                 .filter(resource -> resource.getName().equalsIgnoreCase(name))
                 .findFirst();
+    }
+
+    private String stripBom(String value) {
+        if (value != null && !value.isEmpty() && value.charAt(0) == '\uFEFF') {
+            return value.substring(1);
+        }
+        return value;
+    }
+
+    private boolean isHeaderRow(List<String> parts) {
+        return !parts.isEmpty() && "name".equalsIgnoreCase(stripBom(parts.get(0)).trim());
+    }
+
+    private char detectDelimiter(String line) {
+        int commaCount = countUnquotedDelimiter(line, ',');
+        int semicolonCount = countUnquotedDelimiter(line, ';');
+        return semicolonCount > commaCount ? ';' : ',';
+    }
+
+    private int countUnquotedDelimiter(String line, char delimiter) {
+        int count = 0;
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char current = line.charAt(i);
+            if (current == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    i++;
+                    continue;
+                }
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (current == delimiter && !inQuotes) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private List<String> parseCsvColumns(String line, char delimiter) {
+        List<String> columns = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char value = line.charAt(i);
+
+            if (value == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (value == delimiter && !inQuotes) {
+                columns.add(current.toString().trim());
+                current.setLength(0);
+                continue;
+            }
+
+            current.append(value);
+        }
+
+        columns.add(current.toString().trim());
+        return columns;
+    }
+
+    private String requiredValue(String value, String field, int lineNumber) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("missing required value for " + field + " at line " + lineNumber + ".");
+        }
+        return normalized;
+    }
+
+    private int parseCapacity(String value, int lineNumber) {
+        String normalized = requiredValue(value, "capacity", lineNumber);
+        try {
+            int capacity = Integer.parseInt(normalized);
+            if (capacity <= 0) {
+                throw new IllegalArgumentException("capacity must be greater than zero.");
+            }
+            return capacity;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("capacity must be a valid number.");
+        }
+    }
+
+    private ResourceType parseResourceType(String value, int lineNumber) {
+        String normalized = normalizeToken(requiredValue(value, "type", lineNumber));
+        String compact = normalized.replace("_", "");
+
+        if ("LECTUREHALL".equals(compact)) {
+            normalized = "LECTURE_HALL";
+        } else if ("MEETINGROOM".equals(compact)) {
+            normalized = "MEETING_ROOM";
+        }
+
+        try {
+            return ResourceType.valueOf(normalized);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("invalid resource type '" + value + "'.");
+        }
+    }
+
+    private ResourceStatus parseResourceStatus(String value, int lineNumber) {
+        String normalized = normalizeToken(requiredValue(value, "status", lineNumber));
+        String compact = normalized.replace("_", "");
+
+        if ("OUTOFSERVICE".equals(compact) || "OUTOFORDER".equals(compact) || "UNAVAILABLE".equals(compact)) {
+            normalized = "OUT_OF_SERVICE";
+        } else if ("UNDERMAINTENANCE".equals(compact)) {
+            normalized = "UNDER_MAINTENANCE";
+        } else if ("AVAILABLE".equals(compact)) {
+            normalized = "ACTIVE";
+        }
+
+        try {
+            return ResourceStatus.valueOf(normalized);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("invalid resource status '" + value + "'.");
+        }
+    }
+
+    private String normalizeToken(String value) {
+        return value.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_')
+                .replaceAll("_+", "_");
     }
 }

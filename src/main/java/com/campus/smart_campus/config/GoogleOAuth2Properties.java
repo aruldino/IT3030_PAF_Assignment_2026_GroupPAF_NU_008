@@ -9,6 +9,7 @@ public class GoogleOAuth2Properties {
     private boolean devAdminShortcutEnabled;
     private String clientId = "";
     private String clientSecret = "";
+    private String apiKey = "";
     private String redirectUri = "{baseUrl}/login/oauth2/code/google";
     private String authorizationUrl = "http://localhost:8080/oauth2/authorization/google";
     private String frontendSuccessUrl = "http://localhost:5173/?oauth2=success";
@@ -46,6 +47,14 @@ public class GoogleOAuth2Properties {
 
     public void setClientSecret(String clientSecret) {
         this.clientSecret = clientSecret;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
     }
 
     public String getRedirectUri() {
