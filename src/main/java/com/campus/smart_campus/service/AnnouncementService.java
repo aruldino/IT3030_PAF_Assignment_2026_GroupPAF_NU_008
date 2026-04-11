@@ -16,10 +16,16 @@ public class AnnouncementService {
 
     private final AnnouncementRepository announcementRepository;
     private final AuthService authService;
+    private final NotificationService notificationService;
 
-    public AnnouncementService(AnnouncementRepository announcementRepository, AuthService authService) {
+    public AnnouncementService(
+            AnnouncementRepository announcementRepository,
+            AuthService authService,
+            NotificationService notificationService
+    ) {
         this.announcementRepository = announcementRepository;
         this.authService = authService;
+        this.notificationService = notificationService;
     }
 
     public List<Announcement> getAnnouncements() {
@@ -37,7 +43,9 @@ public class AnnouncementService {
         announcement.setContent(request.content().trim());
         announcement.setAuthor(currentUser.fullName());
         announcement.setCreatedAt(LocalDateTime.now());
-        return announcementRepository.save(announcement);
+        Announcement saved = announcementRepository.save(announcement);
+        notificationService.publishAnnouncement(saved);
+        return saved;
     }
 
     public void deleteAnnouncement(Long id, HttpSession session) {
@@ -49,6 +57,11 @@ public class AnnouncementService {
         Announcement announcement = announcementRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Announcement not found."));
         announcementRepository.delete(announcement);
+        notificationService.publish(
+                "Announcement removed: " + announcement.getTitle(),
+                announcement.getContent(),
+                "ANNOUNCEMENT"
+        );
     }
 
     public Announcement updateAnnouncement(Long id, AnnouncementRequest request, HttpSession session) {
@@ -61,6 +74,8 @@ public class AnnouncementService {
                 .orElseThrow(() -> new NotFoundException("Announcement not found."));
         announcement.setTitle(request.title().trim());
         announcement.setContent(request.content().trim());
-        return announcementRepository.save(announcement);
+        Announcement saved = announcementRepository.save(announcement);
+        notificationService.publishAnnouncement(saved);
+        return saved;
     }
 }

@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
@@ -67,6 +68,12 @@ public class GlobalExceptionHandler {
             message = "Cannot delete resource: This resource has maintenance tickets. Please resolve or close them first.";
         }
         return new ApiError(LocalDateTime.now(), 409, "Data Integrity Violation", message, Map.of());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError handleNoResourceFound(NoResourceFoundException ex) {
+        return new ApiError(LocalDateTime.now(), 404, "Not Found", "The requested resource was not found.", Map.of());
     }
 
     @ExceptionHandler(Exception.class)

@@ -5,7 +5,8 @@ import Header from "./components/Header";
 import AnnouncementsList from "./components/AnnouncementsList";
 import "./portal.css";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const GOOGLE_LOGIN_URL = import.meta.env.VITE_GOOGLE_LOGIN_URL ?? "http://localhost:8080/api/auth/google";
 const resourceTypes = ["LECTURE_HALL", "LAB", "MEETING_ROOM", "EQUIPMENT"];
 const resourceStatuses = ["ACTIVE", "OUT_OF_SERVICE", "MAINTENANCE", "UNDER_MAINTENANCE"];
 const bookingStatuses = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"];
@@ -450,6 +451,25 @@ export default function PortalApp() {
   useEffect(() => { bootstrap(); }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthState = params.get("oauth2");
+    if (!oauthState) {
+      return;
+    }
+
+    if (oauthState === "success") {
+      setAlert({ type: "success", message: "Google sign-in completed successfully." });
+    } else if (oauthState === "error") {
+      setAlert({
+        type: "error",
+        message: params.get("message") ?? "Google sign-in failed. Please try again.",
+      });
+    }
+
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+  }, []);
+
+  useEffect(() => {
     const handleHashChange = () => {
       const hashPage = window.location.hash.replace(/^#/, "");
       if (isValidPage(hashPage)) {
@@ -546,10 +566,16 @@ export default function PortalApp() {
 
   async function loadWorkspace(role?: string) {
     setLoading(true);
-    const shouldLoadUsers = role === "SUPER_ADMIN" || currentUser?.role === "SUPER_ADMIN";
+    const effectiveRole = roleAliases[role ?? currentUser?.role ?? ""] ?? role ?? currentUser?.role ?? "";
+    const shouldLoadUsers = effectiveRole === "SUPER_ADMIN";
+    const canViewBookings =
+      effectiveRole === "STUDENT" ||
+      effectiveRole === "STAFF" ||
+      effectiveRole === "ADMIN" ||
+      effectiveRole === "SUPER_ADMIN";
     const [summaryData, bookingData, ticketData, announcementData, notificationData, notificationPreferenceData, userData] = await Promise.all([
       api("/dashboard/summary", {}, true),
-      api(`/bookings${bookingFilter ? `?status=${bookingFilter}` : ""}`, {}, true),
+      canViewBookings ? api(`/bookings${bookingFilter ? `?status=${bookingFilter}` : ""}`, {}, true) : Promise.resolve(null),
       api(`/maintenance${ticketFilter ? `?status=${ticketFilter}` : ""}`, {}, true),
       api("/announcements", {}, true),
       api("/notifications", {}, true),
@@ -1015,6 +1041,15 @@ function AuthView({ authTab, setAuthTab, loginForm, setLoginForm, registerForm, 
             />
             {authErrors.login.password && <span className="field-error">{authErrors.login.password}</span>}
             <button className="primary-button wide">Login</button>
+              <button
+                type="button"
+                className="secondary-button wide"
+                onClick={() => {
+                window.location.href = GOOGLE_LOGIN_URL;
+              }}
+            >
+              Continue with Google
+            </button>
           </form>
         ) : (
           <form className="auth-form" onSubmit={handleRegister} noValidate>

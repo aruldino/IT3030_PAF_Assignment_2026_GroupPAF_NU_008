@@ -3,9 +3,14 @@ package com.campus.smart_campus.controller;
 import com.campus.smart_campus.dto.LoginRequest;
 import com.campus.smart_campus.dto.RegisterRequest;
 import com.campus.smart_campus.dto.UserProfileResponse;
+import com.campus.smart_campus.config.GoogleOAuth2Properties;
 import com.campus.smart_campus.service.AuthService;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final GoogleOAuth2Properties googleOAuth2Properties;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, GoogleOAuth2Properties googleOAuth2Properties) {
         this.authService = authService;
+        this.googleOAuth2Properties = googleOAuth2Properties;
     }
 
     @PostMapping("/register")
@@ -40,6 +47,33 @@ public class AuthController {
     @PostMapping("/login/oauth")
     public UserProfileResponse oauthLogin(@Valid @RequestBody LoginRequest request, HttpSession session) {
         return authService.login(request, session);
+    }
+
+    @GetMapping("/google")
+    public void googleLogin(HttpSession session, HttpServletResponse response) throws IOException {
+        if (googleOAuth2Properties.isDevAdminShortcutEnabled()) {
+            authService.loginAsAdminShortcut(
+                    googleOAuth2Properties.getDevAdminName(),
+                    googleOAuth2Properties.getDevAdminEmail(),
+                    session
+            );
+            response.sendRedirect(googleOAuth2Properties.getFrontendSuccessUrl());
+            return;
+        }
+
+        if (!googleOAuth2Properties.isEnabled()
+                || googleOAuth2Properties.getClientId().isBlank()
+                || googleOAuth2Properties.getClientSecret().isBlank()) {
+            String message = URLEncoder.encode(
+                    "Google login is not configured on this server.",
+                    StandardCharsets.UTF_8
+            );
+            String delimiter = googleOAuth2Properties.getFrontendFailureUrl().contains("?") ? "&" : "?";
+            response.sendRedirect(googleOAuth2Properties.getFrontendFailureUrl() + delimiter + "message=" + message);
+            return;
+        }
+
+        response.sendRedirect(googleOAuth2Properties.getAuthorizationUrl());
     }
 
     @GetMapping("/me")

@@ -34,7 +34,8 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
     <header className="app-header">
       <div className="header-container">
         {/* Mobile Menu Toggle */}
-        <button 
+        <button
+          type="button"
           className="menu-toggle"
           onClick={() => setSidebarOpen && setSidebarOpen(!sidebarOpen)}
           aria-label="Toggle sidebar menu"
@@ -70,11 +71,17 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
               className="badge badge-light notification-badge" 
               aria-label={`${notificationCount} unread notifications`}
               onClick={onAlertsClick}
-              style={{ cursor: 'pointer', padding: 'var(--spacing-xs)', borderRadius: '4px' }}
             >
-              🔔 {notificationCount} alerts
+              Alerts {notificationCount}
             </button>
-            <div className="user-profile" onClick={() => setShowDropdown(!showDropdown)}>
+            <button
+              type="button"
+              className="user-profile"
+              onClick={() => setShowDropdown(!showDropdown)}
+              aria-haspopup="menu"
+              aria-expanded={showDropdown}
+              aria-label={`Open account menu for ${currentUser.fullName}`}
+            >
               <div className="user-avatar">
                 {currentUser.fullName.charAt(0).toUpperCase()}
               </div>
@@ -82,10 +89,10 @@ export default function Header({ currentUser, onLogout, onDeleteAccount, notific
                 <div className="user-name">{currentUser.fullName}</div>
                 <div className="user-role">{displayRole}</div>
               </div>
-              <svg className={`dropdown-icon ${showDropdown ? 'active' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+              <svg className={`dropdown-icon ${showDropdown ? "active" : ""}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
-            </div>
+            </button>
 
             {/* Dropdown Menu */}
             {showDropdown && (

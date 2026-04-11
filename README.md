@@ -163,6 +163,28 @@ If you are presenting this as a 4-member project, this version fits the implemen
 - Frontend: React, TypeScript, Vite
 - Security: Session-based authentication with role checks
 
+## Local Environment
+
+- Root env file: [`.env`](./.env)
+- Frontend env file: [`frontend/.env`](./frontend/.env)
+- One-command Windows launcher: [`start-dev.ps1`](./start-dev.ps1)
+- Root npm runner: [`package.json`](./package.json)
+
+To start both apps on Windows:
+
+```powershell
+.\start-dev.ps1
+```
+
+To start both apps with npm from the repo root:
+
+```powershell
+npm install
+npm run dev
+```
+
+Set `GOOGLE_OAUTH_ENABLED=true` and replace the Google client placeholders in `.env` before testing Google sign-in.
+
 ## Requirements Alignment
 
 - User Authentication & Authorization: implemented with secure session login, role checks, and OAuth-style login endpoint compatibility
@@ -181,3 +203,4 @@ If you are presenting this as a 4-member project, this version fits the implemen
 - The current implementation is aligned with the code in this repository.
 - Google Sign-In can be integrated later if your viva requires a live OAuth provider flow; the current code already provides secure login, role handling, and an OAuth-compatible login route name for documentation purposes.
 - If you want, future enhancements can include QR check-in, richer analytics charts, and full third-party OAuth provider integration.
+- For submission prep, see [`RUBRIC_ALIGNMENT.md`](./RUBRIC_ALIGNMENT.md) for a short demo script and requirement-to-code map.

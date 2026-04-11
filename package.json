@@ -1,0 +1,22 @@
+{
+  "name": "smart-campus",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev:all",
+    "dev:all": "concurrently --names backend,frontend --prefix-colors blue,green --kill-others-on-fail \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-backend.ps1",
+    "dev:frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-frontend.ps1",
+    "backend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-backend.ps1",
+    "frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-frontend.ps1",
+    "install:all": "npm install",
+    "build:frontend": "npm --prefix frontend run build",
+    "test:backend": "./mvnw.cmd \"-Dmaven.repo.local=.m2repo\" test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

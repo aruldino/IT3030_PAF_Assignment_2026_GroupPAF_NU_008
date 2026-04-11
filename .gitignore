@@ -2,8 +2,20 @@ HELP.md
 target/
 .m2repo/
 data/
+node_modules/
 frontend/node_modules/
+frontend/dist/
 .mvn/wrapper/maven-wrapper.jar
+backend.log
+backend.err
+backend.run.log
+backend.run.err.log
+backend.runtime.out.log
+backend.runtime.err.log
+*.log
+*.err
+.env
+frontend/.env
 !**/src/main/**/target/
 !**/src/test/**/target/
 
