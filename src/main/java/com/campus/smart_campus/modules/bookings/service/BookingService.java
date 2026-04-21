@@ -100,8 +100,8 @@ public class BookingService {
         booking.setResource(resource);
         booking.setRequestedBy(request.requestedBy().trim());
         booking.setDepartment(request.department().trim());
-        booking.setAcademicYear(request.academicYear().trim());
-        booking.setSemester(request.semester().trim());
+        booking.setAcademicYear(cleanOptional(request.academicYear()));
+        booking.setSemester(cleanOptional(request.semester()));
         booking.setBookingDate(request.bookingDate());
         booking.setStartTime(request.startTime());
         booking.setEndTime(request.endTime());
@@ -225,5 +225,14 @@ public class BookingService {
     private boolean isManagerOrStaff(AppUser user) {
         return RoleAccess.canManageBookings(user.getRole())
                 || RoleAccess.normalize(user.getRole()) == com.campus.smart_campus.modules.users.model.UserRole.STAFF;
+    }
+
+    private String cleanOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
