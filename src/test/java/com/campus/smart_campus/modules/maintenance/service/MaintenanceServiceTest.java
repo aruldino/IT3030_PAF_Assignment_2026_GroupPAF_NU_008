@@ -121,6 +121,32 @@ class MaintenanceServiceTest {
         assertEquals("Edited note", updated.comment());
     }
 
+    @Test
+    void closedTicketCannotBeReopened() {
+        AppUser admin = user(6L, "Admin Three", "admin3@campus.com", UserRole.ADMIN);
+        MaintenanceTicket closedTicket = ticket(15L, "tech@campus.com", MaintenanceStatus.CLOSED);
+
+        when(appUserRepository.findById(6L)).thenReturn(Optional.of(admin));
+        when(maintenanceTicketRepository.findById(15L)).thenReturn(Optional.of(closedTicket));
+
+        assertThrows(
+                BusinessException.class,
+                () -> maintenanceService.updateStatus(15L, MaintenanceStatus.OPEN, null, sessionFor(6L)));
+    }
+
+    @Test
+    void openTicketCannotBeResolvedDirectly() {
+        AppUser admin = user(7L, "Admin Four", "admin4@campus.com", UserRole.ADMIN);
+        MaintenanceTicket openTicket = ticket(16L, "tech@campus.com", MaintenanceStatus.OPEN);
+
+        when(appUserRepository.findById(7L)).thenReturn(Optional.of(admin));
+        when(maintenanceTicketRepository.findById(16L)).thenReturn(Optional.of(openTicket));
+
+        assertThrows(
+                BusinessException.class,
+                () -> maintenanceService.updateStatus(16L, MaintenanceStatus.RESOLVED, null, sessionFor(7L)));
+    }
+
     private MockHttpSession sessionFor(Long userId) {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(AuthService.SESSION_USER_ID, userId);
