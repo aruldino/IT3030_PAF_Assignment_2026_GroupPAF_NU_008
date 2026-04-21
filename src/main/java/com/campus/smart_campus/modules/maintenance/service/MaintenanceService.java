@@ -62,7 +62,7 @@ public class MaintenanceService {
 
     public List<MaintenanceTicket> getTickets(MaintenanceStatus status, HttpSession session) {
         AppUser currentUser = getCurrentUser(session);
-        UserRole role = RoleAccess.normalize(currentUser.getRole());
+        UserRole role = roleOf(currentUser);
 
         if (role == UserRole.ADMIN || role == UserRole.SUPER_ADMIN) {
             return getTickets(status);
@@ -104,21 +104,40 @@ public class MaintenanceService {
     public MaintenanceTicket updateStatus(@NonNull Long id, @NonNull MaintenanceStatus status,
             String assignedTechnician, HttpSession session) {
         AppUser currentUser = getCurrentUser(session);
+        UserRole role = roleOf(currentUser);
         MaintenanceTicket ticket = maintenanceTicketRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Maintenance ticket not found with id: " + id));
+        String normalizedAssignedTechnician = assignedTechnician == null ? null : assignedTechnician.trim();
 
-        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.TECHNICIAN
+        if (role == UserRole.TECHNICIAN
                 && !isAssignedToCurrentUser(ticket, currentUser)) {
             throw new UnauthorizedException("Technicians can only update assigned tickets.");
         }
 
-        if (!RoleAccess.canManageTickets(currentUser.getRole())
-                && RoleAccess.normalize(currentUser.getRole()) != UserRole.TECHNICIAN) {
+        if (!RoleAccess.canManageTickets(currentUser.getRole()) && role != UserRole.TECHNICIAN) {
             throw new UnauthorizedException("You do not have permission to update this ticket.");
         }
 
+        if (role == UserRole.TECHNICIAN
+                && normalizedAssignedTechnician != null
+                && !matchesUser(normalizedAssignedTechnician, currentUser)) {
+            throw new UnauthorizedException("Technicians cannot reassign tickets to another user.");
+        }
+
+        String effectiveAssignedTechnician = normalizedAssignedTechnician;
+        if (status == MaintenanceStatus.IN_PROGRESS) {
+            if (effectiveAssignedTechnician == null || effectiveAssignedTechnician.isBlank()) {
+                effectiveAssignedTechnician = ticket.getAssignedTechnician();
+            }
+            if (effectiveAssignedTechnician == null || effectiveAssignedTechnician.isBlank()) {
+                throw new BusinessException("Assigned technician is required before moving to IN_PROGRESS.");
+            }
+        }
+
         ticket.setStatus(status);
-        ticket.setAssignedTechnician(assignedTechnician == null ? null : assignedTechnician.trim());
+        if (effectiveAssignedTechnician != null) {
+            ticket.setAssignedTechnician(effectiveAssignedTechnician);
+        }
         if (status == MaintenanceStatus.IN_PROGRESS && ticket.getAssignedAt() == null) {
             ticket.setAssignedAt(LocalDateTime.now());
         }
@@ -130,8 +149,8 @@ public class MaintenanceService {
 
     public MaintenanceTicket assignTechnician(@NonNull Long id, @NonNull String technician, HttpSession session) {
         AppUser currentUser = getCurrentUser(session);
-        if (RoleAccess.normalize(currentUser.getRole()) == UserRole.TECHNICIAN
-                || RoleAccess.normalize(currentUser.getRole()) == UserRole.STUDENT) {
+        UserRole role = roleOf(currentUser);
+        if (role == UserRole.TECHNICIAN || role == UserRole.STUDENT) {
             throw new UnauthorizedException("Only administrators can assign technicians.");
         }
 
@@ -151,8 +170,16 @@ public class MaintenanceService {
     }
 
     public List<MaintenanceCommentResponse> addComment(@NonNull Long id, @NonNull String author,
-            @NonNull String comment) {
+            @NonNull String comment, HttpSession session) {
         ensureTicketExists(id);
+        AppUser currentUser = getCurrentUser(session);
+        if (!RoleAccess.canCreateTickets(currentUser.getRole())
+                && !RoleAccess.canManageTickets(currentUser.getRole())) {
+            throw new UnauthorizedException("You do not have permission to add comments.");
+        }
+        if (!RoleAccess.canManageResources(currentUser.getRole()) && !matchesUser(author.trim(), currentUser)) {
+            throw new UnauthorizedException("You can only comment using your own account identity.");
+        }
         MaintenanceCommentResponse entry = new MaintenanceCommentResponse(
                 commentSequence.getAndIncrement(),
                 author.trim(),
@@ -318,6 +345,10 @@ public class MaintenanceService {
         return privileged || (ownsComment && withinWindow);
     }
 
+    private UserRole roleOf(AppUser user) {
+        return RoleAccess.normalize(user.getRole());
+    }
+
     private boolean isAssignedToCurrentUser(MaintenanceTicket ticket, AppUser currentUser) {
         if (ticket.getAssignedTechnician() == null || ticket.getAssignedTechnician().isBlank()) {
             return false;
@@ -334,6 +365,13 @@ public class MaintenanceService {
         String fullName = currentUser.getFullName().trim().toLowerCase();
         String email = currentUser.getEmail().trim().toLowerCase();
         return reportedBy.equals(fullName) || reportedBy.equals(email);
+    }
+
+    private boolean matchesUser(String value, AppUser currentUser) {
+        String normalized = value.trim().toLowerCase();
+        String fullName = currentUser.getFullName().trim().toLowerCase();
+        String email = currentUser.getEmail().trim().toLowerCase();
+        return normalized.equals(fullName) || normalized.equals(email);
     }
 
     private MaintenancePriority resolvePriority(String issueType, String description,
