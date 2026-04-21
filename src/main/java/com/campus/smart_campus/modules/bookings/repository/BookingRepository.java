@@ -1,0 +1,67 @@
+package com.campus.smart_campus.modules.bookings.repository;
+
+import com.campus.smart_campus.modules.bookings.model.Booking;
+import com.campus.smart_campus.modules.bookings.model.BookingStatus;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.util.List;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface BookingRepository extends JpaRepository<Booking, Long> {
+    List<Booking> findByStatusOrderByBookingDateAscStartTimeAsc(BookingStatus status);
+    List<Booking> findByResource_IdOrderByBookingDateAscStartTimeAsc(Long resourceId);
+    List<Booking> findByStatusOrderByCreatedAtAsc(BookingStatus status);
+
+    @Query("""
+            select case when count(b) > 0 then true else false end
+            from Booking b
+            where b.resource.id = :resourceId
+              and b.bookingDate = :bookingDate
+              and b.status = com.campus.smart_campus.modules.bookings.model.BookingStatus.APPROVED
+              and b.startTime < :endTime
+              and b.endTime > :startTime
+            """)
+    boolean hasApprovedConflict(
+            @Param("resourceId") Long resourceId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime
+    );
+
+    @Query("""
+            select b
+            from Booking b
+            where b.resource.id = :resourceId
+              and b.bookingDate = :bookingDate
+              and b.status in (com.campus.smart_campus.modules.bookings.model.BookingStatus.PENDING,
+                               com.campus.smart_campus.modules.bookings.model.BookingStatus.APPROVED)
+              and b.startTime < :endTime
+              and b.endTime > :startTime
+            order by b.startTime asc
+            """)
+    List<Booking> findConflicts(
+            @Param("resourceId") Long resourceId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime
+    );
+
+    @Modifying
+    @Query("delete from Booking b where b.resource.id = :resourceId")
+    int deleteByResourceId(@Param("resourceId") Long resourceId);
+
+    @Query("""
+            select b
+            from Booking b
+            where b.status = com.campus.smart_campus.modules.bookings.model.BookingStatus.PENDING
+              and b.createdAt < :cutoff
+            order by b.createdAt asc
+            """)
+    List<Booking> findPendingCreatedBefore(@Param("cutoff") LocalDateTime cutoff);
+}
+
+

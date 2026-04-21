@@ -1,1 +1,2 @@
-export { default } from "../pages/PortalPage";
+export { default } from "./PortalPage";
+

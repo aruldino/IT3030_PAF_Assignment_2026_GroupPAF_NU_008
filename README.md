@@ -6,6 +6,17 @@ A modular campus management platform built with Spring Boot and React for resour
 
 This project is designed as a practical Smart Campus Operations Hub for college and university workflows. It combines a Spring Boot REST backend with a React frontend to manage core campus operations in one place.
 
+## Source of Truth
+
+Root paths are the only canonical development tree:
+
+- `src/`
+- `frontend/`
+- `.github/`
+- Root-level scripts and manifests (`pom.xml`, `package.json`, `start-*.ps1`)
+
+The historical mirror path `bin/` is deprecated and must not be used for active development. CI guardrails reject changes that reintroduce `bin`.
+
 The system currently supports:
 
 - Resource management for lecture halls, labs, meeting rooms, and equipment
