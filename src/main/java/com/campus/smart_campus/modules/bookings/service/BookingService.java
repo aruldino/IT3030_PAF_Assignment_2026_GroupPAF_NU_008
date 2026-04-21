@@ -57,8 +57,7 @@ public class BookingService {
 
     public List<Booking> getBookings(BookingStatus status, HttpSession session) {
         AppUser currentUser = getCurrentUser(session);
-        if (RoleAccess.canManageBookings(currentUser.getRole()) || RoleAccess
-                .normalize(currentUser.getRole()) == com.campus.smart_campus.modules.users.model.UserRole.STAFF) {
+        if (isManagerOrStaff(currentUser)) {
             return getBookings(status);
         }
 
@@ -73,8 +72,7 @@ public class BookingService {
 
     public List<Booking> getBookingHistory(HttpSession session) {
         AppUser currentUser = getCurrentUser(session);
-        if (RoleAccess.canManageBookings(currentUser.getRole()) || RoleAccess
-                .normalize(currentUser.getRole()) == com.campus.smart_campus.modules.users.model.UserRole.STAFF) {
+        if (isManagerOrStaff(currentUser)) {
             return getBookingHistory();
         }
 
@@ -222,5 +220,10 @@ public class BookingService {
         if (!request.endTime().isAfter(request.startTime())) {
             throw new BusinessException("End time must be later than start time.");
         }
+    }
+
+    private boolean isManagerOrStaff(AppUser user) {
+        return RoleAccess.canManageBookings(user.getRole())
+                || RoleAccess.normalize(user.getRole()) == com.campus.smart_campus.modules.users.model.UserRole.STAFF;
     }
 }
