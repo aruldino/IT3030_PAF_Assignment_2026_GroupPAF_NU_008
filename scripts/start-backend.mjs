@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 
 const child = spawn(
-  'mvnw.cmd',
-  ['-Dmaven.repo.local=.m2repo', 'spring-boot:run'],
+  '.\\backend\\mvnw.cmd',
+  ['-Dmaven.repo.local=.m2repo', '-f', '.\\backend\\pom.xml', 'spring-boot:run'],
   { stdio: 'inherit', shell: true }
 );
 

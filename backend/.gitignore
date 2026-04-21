@@ -1,0 +1,5 @@
+target/
+.m2repo/
+.env
+*.log
+*.err

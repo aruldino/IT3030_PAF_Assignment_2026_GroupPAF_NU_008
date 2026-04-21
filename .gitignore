@@ -1,6 +1,8 @@
 HELP.md
 target/
+backend/target/
 .m2repo/
+backend/.m2repo/
 data/
 node_modules/
 frontend/node_modules/
@@ -16,6 +18,7 @@ backend.runtime.err.log
 *.err
 .env
 frontend/.env
+backend/.env
 !**/src/main/**/target/
 !**/src/test/**/target/
 
