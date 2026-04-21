@@ -33,5 +33,6 @@ function Import-DotEnvFile {
 }
 
 Import-DotEnvFile -Path (Join-Path $PSScriptRoot '.env')
+Import-DotEnvFile -Path (Join-Path $PSScriptRoot '..\.env')
 
 & .\mvnw.cmd "-Dmaven.repo.local=.m2repo" spring-boot:run
