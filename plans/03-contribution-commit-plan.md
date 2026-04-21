@@ -4,6 +4,14 @@
 
 Reach minimum meaningful contributions for each team member with clean branch ownership and realistic commit history.
 
+## Execution Status (Current Workspace)
+
+- Maintenance owner progress:
+  - Done: `refactor(maintenance): move maintenance files into module package` (already present in current structure)
+  - Done: `feat(maintenance): harden assignment and SLA update flow` (status/assignment safeguards added)
+  - Done: `test(maintenance): add ticket status and comment permission tests` (`MaintenanceServiceTest`)
+- Remaining branches still need owner-specific commit slices and author-based commits.
+
 ## Baseline Check (April 21, 2026)
 
 Based on `git shortlog -sne --all` and direct email counting:
