@@ -55,6 +55,7 @@ public class ResourceService {
             ResourceStatus status,
             String query
     ) {
+        validateSearchCapacity(minCapacity);
         List<Resource> resources = resourceRepository.findAll();
 
         if (type != null) {
@@ -256,6 +257,7 @@ public class ResourceService {
     }
 
     private void apply(@NonNull Resource resource, @NonNull ResourceRequest request) {
+        validateRequestCapacity(request.capacity());
         resource.setName(sanitize(request.name()));
         resource.setType(request.type());
         resource.setCapacity(request.capacity());
@@ -508,6 +510,18 @@ public class ResourceService {
 
     private String sanitize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private void validateSearchCapacity(Integer minCapacity) {
+        if (minCapacity != null && minCapacity < 0) {
+            throw new BusinessException("Minimum capacity cannot be negative.");
+        }
+    }
+
+    private void validateRequestCapacity(int capacity) {
+        if (capacity <= 0) {
+            throw new BusinessException("Capacity must be greater than zero.");
+        }
     }
 }
 
