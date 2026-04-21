@@ -336,9 +336,9 @@ public class MaintenanceService {
     }
 
     private boolean canManageComment(MaintenanceCommentResponse comment, AppUser currentUser) {
-        String currentFullName = currentUser.getFullName().trim().toLowerCase();
-        String currentEmail = currentUser.getEmail().trim().toLowerCase();
-        String author = comment.author().trim().toLowerCase();
+        String currentFullName = normalize(currentUser.getFullName());
+        String currentEmail = normalize(currentUser.getEmail());
+        String author = normalize(comment.author());
         boolean ownsComment = author.equals(currentFullName) || author.equals(currentEmail);
         boolean withinWindow = comment.createdAt().isAfter(LocalDateTime.now().minusMinutes(30));
         boolean privileged = RoleAccess.canManageResources(currentUser.getRole());
@@ -354,24 +354,28 @@ public class MaintenanceService {
             return false;
         }
 
-        String assigned = ticket.getAssignedTechnician().trim().toLowerCase();
-        String fullName = currentUser.getFullName().trim().toLowerCase();
-        String email = currentUser.getEmail().trim().toLowerCase();
+        String assigned = normalize(ticket.getAssignedTechnician());
+        String fullName = normalize(currentUser.getFullName());
+        String email = normalize(currentUser.getEmail());
         return assigned.equals(fullName) || assigned.equals(email);
     }
 
     private boolean isReportedByCurrentUser(MaintenanceTicket ticket, AppUser currentUser) {
-        String reportedBy = ticket.getReportedBy().trim().toLowerCase();
-        String fullName = currentUser.getFullName().trim().toLowerCase();
-        String email = currentUser.getEmail().trim().toLowerCase();
+        String reportedBy = normalize(ticket.getReportedBy());
+        String fullName = normalize(currentUser.getFullName());
+        String email = normalize(currentUser.getEmail());
         return reportedBy.equals(fullName) || reportedBy.equals(email);
     }
 
     private boolean matchesUser(String value, AppUser currentUser) {
-        String normalized = value.trim().toLowerCase();
-        String fullName = currentUser.getFullName().trim().toLowerCase();
-        String email = currentUser.getEmail().trim().toLowerCase();
+        String normalized = normalize(value);
+        String fullName = normalize(currentUser.getFullName());
+        String email = normalize(currentUser.getEmail());
         return normalized.equals(fullName) || normalized.equals(email);
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
     }
 
     private MaintenancePriority resolvePriority(String issueType, String description,
