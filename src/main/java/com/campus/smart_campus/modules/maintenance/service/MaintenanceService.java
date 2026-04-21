@@ -118,6 +118,8 @@ public class MaintenanceService {
             throw new UnauthorizedException("You do not have permission to update this ticket.");
         }
 
+        validateStatusTransition(ticket.getStatus(), status);
+
         if (role == UserRole.TECHNICIAN
                 && normalizedAssignedTechnician != null
                 && !matchesUser(normalizedAssignedTechnician, currentUser)) {
@@ -388,6 +390,18 @@ public class MaintenanceService {
             return MaintenancePriority.HIGH;
         }
         return requestedPriority == null ? MaintenancePriority.MEDIUM : requestedPriority;
+    }
+
+    private void validateStatusTransition(MaintenanceStatus current, MaintenanceStatus target) {
+        if (current == target) {
+            return;
+        }
+        if (current == MaintenanceStatus.CLOSED && target != MaintenanceStatus.CLOSED) {
+            throw new BusinessException("Closed tickets cannot be reopened.");
+        }
+        if (current == MaintenanceStatus.OPEN && target == MaintenanceStatus.RESOLVED) {
+            throw new BusinessException("Ticket must be in progress before resolving.");
+        }
     }
 
     private boolean containsAny(String text, String... keywords) {
