@@ -1,40 +1,62 @@
+# General
+.DS_Store
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 HELP.md
-target/
-.m2repo/
-data/
-node_modules/
-frontend/node_modules/
-frontend/dist/
-.mvn/wrapper/maven-wrapper.jar
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+*.err
+*.out
 backend.log
 backend.err
 backend.run.log
 backend.run.err.log
 backend.runtime.out.log
 backend.runtime.err.log
-*.log
-*.err
-.env
-frontend/.env
+
+# Maven
+target/
+backend/target/
+.m2repo/
+backend/.m2repo/
+.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# Node.js
+node_modules/
+frontend/node_modules/
+frontend/dist/
 
-### IntelliJ IDEA ###
+# IDE
 .idea
+.vscode/
+.vs/
+*.code-workspace
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
+# STS
+.apt_generated
+.factorypath
+.springBeans
+.sts4-cache
+
+# NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
@@ -44,5 +66,5 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
-.vscode/
+# Data
+data/

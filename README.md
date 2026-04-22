@@ -8,12 +8,13 @@ This project is designed as a practical Smart Campus Operations Hub for college 
 
 ## Source of Truth
 
-Root paths are the only canonical development tree:
+Canonical project structure:
 
-- `src/`
+- `backend/src/`
 - `frontend/`
 - `.github/`
-- Root-level scripts and manifests (`pom.xml`, `package.json`, `start-*.ps1`)
+- Root-level orchestration files (`package.json`, `start-dev.ps1`, `start-frontend.ps1`)
+- Backend manifests and wrappers inside `backend/` (`pom.xml`, `mvnw*`, `.mvn/`)
 
 The historical mirror path `bin/` is deprecated and must not be used for active development. CI guardrails reject changes that reintroduce `bin`.
 
@@ -178,6 +179,7 @@ If you are presenting this as a 4-member project, this version fits the implemen
 
 - Root env file: [`.env`](./.env)
 - Frontend env file: [`frontend/.env`](./frontend/.env)
+- Backend launcher: [`backend/start-backend.ps1`](./backend/start-backend.ps1)
 - One-command Windows launcher: [`start-dev.ps1`](./start-dev.ps1)
 - Root npm runner: [`package.json`](./package.json)
 
@@ -192,6 +194,14 @@ To start both apps with npm from the repo root:
 ```powershell
 npm install
 npm run dev
+```
+
+Project layout now follows split app folders:
+
+```text
+smart-campus/
+  backend/    # Spring Boot app (.env/.env.example, .gitignore, pom.xml, src/)
+  frontend/   # React app (.env/.env.example, .gitignore, package.json, src/)
 ```
 
 Set `GOOGLE_OAUTH_ENABLED=true` and replace the Google client placeholders in `.env` before testing Google sign-in.
