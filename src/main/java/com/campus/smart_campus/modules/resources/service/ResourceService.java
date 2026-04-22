@@ -55,6 +55,7 @@ public class ResourceService {
             ResourceStatus status,
             String query
     ) {
+        validateSearchCapacity(minCapacity);
         List<Resource> resources = resourceRepository.findAll();
 
         if (type != null) {
@@ -256,13 +257,14 @@ public class ResourceService {
     }
 
     private void apply(@NonNull Resource resource, @NonNull ResourceRequest request) {
-        resource.setName(request.name().trim());
+        validateRequestCapacity(request.capacity());
+        resource.setName(sanitize(request.name()));
         resource.setType(request.type());
         resource.setCapacity(request.capacity());
-        resource.setLocation(request.location().trim());
-        resource.setAvailabilityWindow(request.availabilityWindow().trim());
+        resource.setLocation(sanitize(request.location()));
+        resource.setAvailabilityWindow(sanitize(request.availabilityWindow()));
         resource.setStatus(request.status());
-        resource.setDescription(request.description().trim());
+        resource.setDescription(sanitize(request.description()));
     }
 
     private int scoreSuggestion(Resource resource, String query, List<String> tokens) {
@@ -504,6 +506,22 @@ public class ResourceService {
                 .replace('-', '_')
                 .replace(' ', '_')
                 .replaceAll("_+", "_");
+    }
+
+    private String sanitize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private void validateSearchCapacity(Integer minCapacity) {
+        if (minCapacity != null && minCapacity < 0) {
+            throw new BusinessException("Minimum capacity cannot be negative.");
+        }
+    }
+
+    private void validateRequestCapacity(int capacity) {
+        if (capacity <= 0) {
+            throw new BusinessException("Capacity must be greater than zero.");
+        }
     }
 }
 
