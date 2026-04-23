@@ -8,12 +8,15 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Called automatically after Google OAuth2 login succeeds.
@@ -26,6 +29,9 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+
+    @Value("${app.oauth.success-url:http://localhost:3000/auth/callback}")
+    private String oauthSuccessUrl;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
@@ -54,9 +60,11 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         // Generate JWT token
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
 
+        String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
+        String encodedStatus = URLEncoder.encode(user.getStatus().name(), StandardCharsets.UTF_8);
+
         // Redirect to React frontend with token and status
         getRedirectStrategy().sendRedirect(request, response,
-                "http://localhost:3000/auth/callback?token=" + token
-                        + "&status=" + user.getStatus().name());
+                oauthSuccessUrl + "?token=" + encodedToken + "&status=" + encodedStatus);
     }
 }
