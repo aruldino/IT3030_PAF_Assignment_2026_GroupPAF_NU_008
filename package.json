@@ -1,22 +1,20 @@
 {
-  "name": "smart-campus",
+  "name": "Smart Campus",
   "private": true,
-  "version": "0.1.0",
-  "workspaces": [
-    "frontend"
-  ],
   "scripts": {
-    "dev": "npm run dev:all",
-    "dev:all": "concurrently --names backend,frontend --prefix-colors blue,green --kill-others-on-fail \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\backend\\start-backend.ps1",
-    "dev:frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-frontend.ps1",
-    "backend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\backend\\start-backend.ps1",
-    "frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-frontend.ps1",
-    "install:all": "npm install",
-    "build:frontend": "npm --prefix frontend run build",
-    "test:backend": ".\\backend\\mvnw.cmd \"-Dmaven.repo.local=.m2repo\" -f .\\backend\\pom.xml test"
+    "backend": "cd backend && mvnw spring-boot:run",
+    "frontend": "cd frontend && npm run dev",
+    "dev": "concurrently -n backend,frontend -c green,blue \"npm run backend\" \"npm run frontend\"",
+    "flyway:repair": "cd backend && mvnw flyway:repair"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "lottie-react": "^2.4.1",
+    "recharts": "^3.8.1"
   }
 }

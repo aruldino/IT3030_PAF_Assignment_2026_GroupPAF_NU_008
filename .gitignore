@@ -1,70 +1,60 @@
-# General
-.DS_Store
-*.swp
-*.swo
-*~
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-HELP.md
+# Compiled class files
+*.class
 
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Logs
+# Log files
 *.log
-*.err
-*.out
-backend.log
-backend.err
-backend.run.log
-backend.run.err.log
-backend.runtime.out.log
-backend.runtime.err.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Virtual machine crash logs
+hs_err_pid*
+replay_pid*
 
 # Maven
 target/
-backend/target/
-.m2repo/
-backend/.m2repo/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+.mvn/
+# Spring Boot config (contains secrets)
+src/main/resources/application.properties
 
-# Node.js
+# Node / React
 node_modules/
-frontend/node_modules/
-frontend/dist/
+build/
+dist/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
 
 # IDE
-.idea
-.vscode/
-.vs/
-*.code-workspace
+.idea/
 *.iws
 *.iml
 *.ipr
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# STS
-.apt_generated
-.factorypath
-.springBeans
-.sts4-cache
-
-# NetBeans
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-# Data
-data/
+# OS
+.DS_Store
+Thumbs.db
